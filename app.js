@@ -1,20 +1,19 @@
 // DriveBridge - Universal File Sharing Application
 class DriveBridge {
     constructor() {
-        // Configuration - Replace with your actual OAuth credentials
         this.config = {
-            google: {
-                clientId: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
-                scopes: ['https://www.googleapis.com/auth/drive'],
-                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
-            },
-            microsoft: {
-                clientId: 'YOUR_MICROSOFT_CLIENT_ID',
-                authority: 'https://login.microsoftonline.com/common',
-                redirectUri: window.location.origin,
-                scopes: ['https://graph.microsoft.com/Files.ReadWrite', 'https://graph.microsoft.com/User.Read']
-            }
-        };
+    google: {
+        clientId: Config.getGoogleClientId(),
+        scopes: ['https://www.googleapis.com/auth/drive'],
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+    },
+    microsoft: {
+        clientId: Config.getMicrosoftClientId(),
+        authority: 'https://login.microsoftonline.com/common',
+        redirectUri: Config.getRedirectUri(),
+        scopes: ['https://graph.microsoft.com/Files.ReadWrite', 'https://graph.microsoft.com/User.Read']
+    }
+};
 
         // State management
         this.state = {
