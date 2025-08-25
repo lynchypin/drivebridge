@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriveBridge - Universal File Sharing</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Authentication View -->
+    <div id="auth-view" class="auth-container">
+        <div class="auth-card card">
+            <div class="card__body">
+                <div class="logo-section">
+                    <h1>DriveBridge</h1>
+                    <p class="subtitle">Universal File Sharing</p>
+                </div>
+                
+                <div class="description">
+                    <p>Seamlessly transfer files between Google Drive and OneDrive. Connect your cloud storage accounts to get started.</p>
+                </div>
+
+                <div class="auth-buttons">
+                    <div class="service-card">
+                        <div class="service-info">
+                            <h3>Google Drive</h3>
+                            <div class="connection-status" id="google-status">
+                                <span class="status status--error">Disconnected</span>
+                            </div>
+                        </div>
+                        <button id="google-auth-btn" class="btn btn--primary">Connect Google Drive</button>
+                    </div>
+
+                    <div class="service-card">
+                        <div class="service-info">
+                            <h3>OneDrive</h3>
+                            <div class="connection-status" id="onedrive-status">
+                                <span class="status status--error">Disconnected</span>
+                            </div>
+                        </div>
+                        <button id="onedrive-auth-btn" class="btn btn--primary">Connect OneDrive</button>
+                    </div>
+                </div>
+
+                <div class="proceed-section">
+                    <button id="proceed-btn" class="btn btn--secondary btn--full-width" disabled>
+                        Continue to Dashboard
+                    </button>
+                </div>
+
+                <div class="setup-notice">
+                    <p><strong>Setup Required:</strong> This demo requires OAuth client IDs for Google Drive and OneDrive APIs. Please configure your credentials in the app.js file before use.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard View -->
+    <div id="dashboard-view" class="dashboard-container hidden">
+        <header class="dashboard-header">
+            <div class="header-content">
+                <h2>DriveBridge Dashboard</h2>
+                <div class="header-actions">
+                    <button id="refresh-btn" class="btn btn--outline btn--sm">Refresh</button>
+                    <button id="disconnect-btn" class="btn btn--outline btn--sm">Disconnect All</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="dashboard-main">
+            <!-- Transfer Queue -->
+            <div id="transfer-queue" class="transfer-queue hidden">
+                <h3>Transfer Queue</h3>
+                <div id="transfer-list" class="transfer-list"></div>
+            </div>
+
+            <!-- File Browser Panes -->
+            <div class="browser-container">
+                <!-- Google Drive Pane -->
+                <div class="browser-pane">
+                    <div class="pane-header">
+                        <h3>Google Drive</h3>
+                        <div class="pane-actions">
+                            <input type="text" id="google-search" class="form-control search-input" placeholder="Search files...">
+                            <button id="google-create-folder" class="btn btn--sm btn--outline">New Folder</button>
+                        </div>
+                    </div>
+                    
+                    <div class="breadcrumb" id="google-breadcrumb">
+                        <span class="breadcrumb-item active">Root</span>
+                    </div>
+                    
+                    <div class="file-browser" id="google-browser">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading files...</p>
+                        </div>
+                    </div>
+
+                    <div class="pane-footer">
+                        <button id="google-to-onedrive" class="btn btn--primary btn--full-width" disabled>
+                            Transfer Selected to OneDrive →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- OneDrive Pane -->
+                <div class="browser-pane">
+                    <div class="pane-header">
+                        <h3>OneDrive</h3>
+                        <div class="pane-actions">
+                            <input type="text" id="onedrive-search" class="form-control search-input" placeholder="Search files...">
+                            <button id="onedrive-create-folder" class="btn btn--sm btn--outline">New Folder</button>
+                        </div>
+                    </div>
+                    
+                    <div class="breadcrumb" id="onedrive-breadcrumb">
+                        <span class="breadcrumb-item active">Root</span>
+                    </div>
+                    
+                    <div class="file-browser" id="onedrive-browser">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading files...</p>
+                        </div>
+                    </div>
+
+                    <div class="pane-footer">
+                        <button id="onedrive-to-google" class="btn btn--primary btn--full-width" disabled>
+                            ← Transfer Selected to Google Drive
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <!-- Create Folder Modal -->
+        <div id="create-folder-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Create New Folder</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Folder Name</label>
+                        <input type="text" id="folder-name-input" class="form-control" placeholder="Enter folder name">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancel-folder" class="btn btn--outline">Cancel</button>
+                    <button id="confirm-folder" class="btn btn--primary">Create Folder</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Details Modal -->
+        <div id="file-details-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>File Details</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="file-details-content"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn--outline modal-close">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Modal -->
+        <div id="error-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Error</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p id="error-message"></p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn--primary modal-close">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification-toast" class="toast hidden">
+        <div class="toast-content">
+            <span id="toast-message"></span>
+            <button id="toast-close" class="toast-close">&times;</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
