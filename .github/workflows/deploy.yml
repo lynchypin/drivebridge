@@ -1,0 +1,30 @@
+name: Deploy DriveBridge
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Create config file
+      run: |
+        cat > config-prod.js << EOF
+        window.DRIVEBRIDGE_CONFIG = {
+            GOOGLE_CLIENT_ID: '${{ secrets.GOOGLE_CLIENT_ID }}',
+            MICROSOFT_CLIENT_ID: '${{ secrets.MICROSOFT_CLIENT_ID }}'
+        };
+        EOF
+    
+    - name: Update index.html to use prod config
+      run: |
+        sed -i 's/<script src="config.js"><\/script>/<script src="config-prod.js"><\/script>/' index.html
+    
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./
