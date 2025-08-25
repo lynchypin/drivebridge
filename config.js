@@ -8,7 +8,7 @@ class Config {
         
         // For GitHub Pages, we'll use a different approach
         // This will be loaded from a separate config file
-        return window.DRIVEBRIDGE_CONFIG?.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
+        return window.DRIVEBRIDGE_CONFIG?.GOOGLE_CLIENT_ID || '572659500576-97729khduevuhv0bti7ce3cm6ep1t7gn.apps.googleusercontent.com';
     }
     
     static getMicrosoftClientId() {
@@ -16,7 +16,7 @@ class Config {
             return process.env.MICROSOFT_CLIENT_ID;
         }
         
-        return window.DRIVEBRIDGE_CONFIG?.MICROSOFT_CLIENT_ID || 'YOUR_MICROSOFT_CLIENT_ID';
+        return window.DRIVEBRIDGE_CONFIG?.MICROSOFT_CLIENT_ID || 'db78149b-9098-4898-b5b5-567fa03f75f0';
     }
     
     static getRedirectUri() {
