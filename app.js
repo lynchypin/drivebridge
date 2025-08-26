@@ -161,7 +161,7 @@ class DriveBridge {
         
         // Transfer log controls
         this.addClickListener('clear-logs-btn', () => this.clearTransferLogs());
-        this.addClickListener('toggle-logs-btn', () => this.toggleTransferLogs());
+        this.addClickListener('toggle-logs-btn', () => this.Logs());
         
         // Folder creation
         this.addClickListener('google-new-folder', () => this.showCreateFolderModal('google'));
@@ -1787,22 +1787,45 @@ class DriveBridge {
     const progressPanel = document.getElementById('transfer-progress');
     const toggleBtn = document.getElementById('toggle-logs-btn');
     const logContainer = document.getElementById('transfer-list');
+    const header = progressPanel?.querySelector('.transfer-header');
     
-    if (progressPanel && toggleBtn && logContainer) {
+    if (progressPanel && toggleBtn && logContainer && header) {
         const isVisible = logContainer.style.display !== 'none';
         
-        // Only hide the log content, not the entire panel
         if (isVisible) {
+            // Hide logs but keep header visible
             logContainer.style.display = 'none';
-            toggleBtn.textContent = '👁️ Show Logs';
-            progressPanel.style.height = 'auto';
+            toggleBtn.textContent = '👁️ Show';
+            header.classList.add('collapsed');
+            header.style.cursor = 'pointer';
+            
+            // Add click handler to header when collapsed
+            header.onclick = () => this.toggleTransferLogs();
+            
+            // Add indicator
+            if (!header.querySelector('.toggle-indicator')) {
+                const indicator = document.createElement('span');
+                indicator.className = 'toggle-indicator';
+                indicator.textContent = '(click to expand)';
+                header.querySelector('h3').appendChild(indicator);
+            }
         } else {
+            // Show logs
             logContainer.style.display = 'block';
-            toggleBtn.textContent = '👁️ Hide Logs';
-            progressPanel.style.height = '';
+            toggleBtn.textContent = '👁️ Hide';
+            header.classList.remove('collapsed');
+            header.style.cursor = 'default';
+            header.onclick = null;
+            
+            // Remove indicator
+            const indicator = header.querySelector('.toggle-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
         }
     }
 }
+
 
 
     refreshFiles() {
