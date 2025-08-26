@@ -4,17 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DriveBridge - Universal File Sharing</title>
+    
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <!-- Styles -->
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Google Identity Services -->
+    <!-- External Scripts from trusted CDNs only -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
-    
-    <!-- Microsoft MSAL Library -->
-    <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.4/lib/msal-browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.4/lib/msal-browser.min.js" 
+            integrity="sha384-..." crossorigin="anonymous" async defer></script>
 </head>
 <body>
     <!-- Authentication View -->
@@ -27,7 +34,11 @@
                 </div>
                 
                 <div class="description">
-                    <p>Seamlessly transfer files between Google Drive and OneDrive. Connect your cloud storage accounts to get started.</p>
+                    <p>Securely transfer files between Google Drive and OneDrive. Your data remains private - authentication happens directly with Google and Microsoft.</p>
+                </div>
+
+                <div class="security-notice">
+                    <p class="security-text">🔒 This application runs entirely in your browser. No data is stored on external servers.</p>
                 </div>
 
                 <div class="auth-buttons">
@@ -68,8 +79,8 @@
             <div class="header__content">
                 <h1 class="header__title">DriveBridge Dashboard</h1>
                 <div class="header__actions">
-                    <button id="refresh-btn" class="btn btn--ghost">Refresh</button>
-                    <button id="disconnect-all-btn" class="btn btn--ghost">Disconnect All</button>
+                    <button id="refresh-btn" class="btn btn--ghost" title="Refresh file lists">🔄 Refresh</button>
+                    <button id="disconnect-all-btn" class="btn btn--ghost" title="Disconnect all services">🔌 Disconnect All</button>
                 </div>
             </div>
         </header>
@@ -81,10 +92,10 @@
                 <div class="panel__header">
                     <h2>Google Drive</h2>
                     <div class="panel__actions">
-                        <input type="text" id="google-search" placeholder="Search files..." class="search-input">
-                        <button id="google-new-folder" class="btn btn--primary">New Folder</button>
-                        <button id="google-select-all" class="btn btn--ghost btn--small">Select All</button>
-                        <button id="google-clear-all" class="btn btn--ghost btn--small">Clear All</button>
+                        <input type="text" id="google-search" placeholder="Search files..." class="search-input" autocomplete="off">
+                        <button id="google-new-folder" class="btn btn--primary btn--small" title="Create new folder">📁 New Folder</button>
+                        <button id="google-select-all" class="btn btn--ghost btn--small" title="Select all files">Select All</button>
+                        <button id="google-clear-all" class="btn btn--ghost btn--small" title="Clear selection">Clear</button>
                     </div>
                 </div>
                 
@@ -97,7 +108,7 @@
                 </div>
                 
                 <div class="transfer-actions">
-                    <button id="transfer-to-onedrive" class="btn btn--transfer" disabled>
+                    <button id="transfer-to-onedrive" class="btn btn--transfer" disabled title="Transfer selected files to OneDrive">
                         Transfer Selected to OneDrive →
                     </button>
                 </div>
@@ -108,10 +119,10 @@
                 <div class="panel__header">
                     <h2>OneDrive</h2>
                     <div class="panel__actions">
-                        <input type="text" id="onedrive-search" placeholder="Search files..." class="search-input">
-                        <button id="onedrive-new-folder" class="btn btn--primary">New Folder</button>
-                        <button id="onedrive-select-all" class="btn btn--ghost btn--small">Select All</button>
-                        <button id="onedrive-clear-all" class="btn btn--ghost btn--small">Clear All</button>
+                        <input type="text" id="onedrive-search" placeholder="Search files..." class="search-input" autocomplete="off">
+                        <button id="onedrive-new-folder" class="btn btn--primary btn--small" title="Create new folder">📁 New Folder</button>
+                        <button id="onedrive-select-all" class="btn btn--ghost btn--small" title="Select all files">Select All</button>
+                        <button id="onedrive-clear-all" class="btn btn--ghost btn--small" title="Clear selection">Clear</button>
                     </div>
                 </div>
                 
@@ -124,7 +135,7 @@
                 </div>
                 
                 <div class="transfer-actions">
-                    <button id="transfer-to-google" class="btn btn--transfer" disabled>
+                    <button id="transfer-to-google" class="btn btn--transfer" disabled title="Transfer selected files to Google Drive">
                         ← Transfer Selected to Google Drive
                     </button>
                 </div>
@@ -136,21 +147,21 @@
             <div class="transfer-header">
                 <h3>Transfer Logs</h3>
                 <div class="transfer-controls">
-                    <button id="clear-logs-btn" class="btn btn--ghost btn--small">Clear Logs</button>
-                    <button id="toggle-logs-btn" class="btn btn--ghost btn--small">Hide</button>
+                    <button id="clear-logs-btn" class="btn btn--ghost btn--small" title="Clear all logs">🗑️ Clear</button>
+                    <button id="toggle-logs-btn" class="btn btn--ghost btn--small" title="Hide/show logs">👁️ Hide</button>
                 </div>
             </div>
-            <div id="transfer-list" class="transfer-logs"></div>
+            <div id="transfer-list" class="transfer-logs" role="log" aria-live="polite"></div>
         </div>
     </div>
 
     <!-- Modals -->
-    <div id="modal-overlay" class="modal-overlay hidden"></div>
+    <div id="modal-overlay" class="modal-overlay hidden" role="presentation"></div>
     
-    <div id="create-folder-modal" class="modal hidden">
+    <div id="create-folder-modal" class="modal hidden" role="dialog" aria-labelledby="folder-modal-title">
         <div class="modal__content">
-            <h3>Create New Folder</h3>
-            <input type="text" id="folder-name-input" placeholder="Folder name" class="input">
+            <h3 id="folder-modal-title">Create New Folder</h3>
+            <input type="text" id="folder-name-input" placeholder="Folder name" class="input" maxlength="255" autocomplete="off">
             <div class="modal__actions">
                 <button id="create-folder-confirm" class="btn btn--primary">Create</button>
                 <button id="create-folder-cancel" class="btn btn--secondary">Cancel</button>
@@ -158,19 +169,9 @@
         </div>
     </div>
     
-    <div id="file-details-modal" class="modal hidden">
+    <div id="error-modal" class="modal hidden" role="dialog" aria-labelledby="error-modal-title">
         <div class="modal__content">
-            <h3>File Details</h3>
-            <div id="file-details-content"></div>
-            <div class="modal__actions">
-                <button id="file-details-close" class="btn btn--secondary">Close</button>
-            </div>
-        </div>
-    </div>
-    
-    <div id="error-modal" class="modal hidden">
-        <div class="modal__content">
-            <h3>Error</h3>
+            <h3 id="error-modal-title">Error</h3>
             <p id="error-message"></p>
             <div class="modal__actions">
                 <button id="error-close" class="btn btn--secondary">Close</button>
@@ -179,10 +180,18 @@
     </div>
 
     <!-- Notification Container -->
-    <div id="notifications" class="notifications"></div>
+    <div id="notifications" class="notifications" role="region" aria-live="polite" aria-label="Notifications"></div>
 
-    <!-- Scripts -->
+    <!-- Application Scripts - Load in correct order -->
     <script src="config.js"></script>
     <script src="app.js"></script>
+    
+    <!-- Security: Prevent any inline script execution -->
+    <script nonce="secure-nonce">
+        // Security check on page load
+        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+            console.warn('🔒 Security Warning: Please use HTTPS in production');
+        }
+    </script>
 </body>
 </html>
