@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Updated Google Identity Services -->
+    <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
     
@@ -83,6 +83,8 @@
                     <div class="panel__actions">
                         <input type="text" id="google-search" placeholder="Search files..." class="search-input">
                         <button id="google-new-folder" class="btn btn--primary">New Folder</button>
+                        <button id="google-select-all" class="btn btn--ghost btn--small">Select All</button>
+                        <button id="google-clear-all" class="btn btn--ghost btn--small">Clear All</button>
                     </div>
                 </div>
                 
@@ -108,6 +110,8 @@
                     <div class="panel__actions">
                         <input type="text" id="onedrive-search" placeholder="Search files..." class="search-input">
                         <button id="onedrive-new-folder" class="btn btn--primary">New Folder</button>
+                        <button id="onedrive-select-all" class="btn btn--ghost btn--small">Select All</button>
+                        <button id="onedrive-clear-all" class="btn btn--ghost btn--small">Clear All</button>
                     </div>
                 </div>
                 
@@ -126,12 +130,18 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Transfer Progress -->
-    <div id="transfer-progress" class="transfer-progress" style="display: none;">
-        <h3>Transfer Progress</h3>
-        <div id="transfer-list"></div>
+        <!-- Transfer Progress Panel -->
+        <div id="transfer-progress" class="transfer-progress">
+            <div class="transfer-header">
+                <h3>Transfer Logs</h3>
+                <div class="transfer-controls">
+                    <button id="clear-logs-btn" class="btn btn--ghost btn--small">Clear Logs</button>
+                    <button id="toggle-logs-btn" class="btn btn--ghost btn--small">Hide</button>
+                </div>
+            </div>
+            <div id="transfer-list" class="transfer-logs"></div>
+        </div>
     </div>
 
     <!-- Modals -->
