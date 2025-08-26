@@ -24,12 +24,17 @@ class DriveBridge {
             microsoftToken: null,
             currentGoogleFolder: 'root',
             currentOneDriveFolder: 'root',
+            googleFolderPath: [{ id: 'root', name: 'Root' }],
+            onedriveFolderPath: [{ id: 'root', name: 'Root' }],
             selectedGoogleFiles: new Set(),
             selectedOneDriveFiles: new Set(),
             transfers: new Map(),
             googleFiles: [],
             oneDriveFiles: [],
-            isInitialized: false
+            transferLogs: [],
+            isInitialized: false,
+            maxFileSize: 100 * 1024 * 1024, // 100MB limit
+            batchSize: 5 // Max 5 files per batch
         };
 
         // File type mappings
@@ -67,6 +72,9 @@ class DriveBridge {
             // Check for existing authentication
             this.checkExistingAuth();
             
+            // Initialize transfer log system
+            this.initTransferLogSystem();
+            
             console.log('DriveBridge initialized successfully');
             this.showNotification('DriveBridge ready! Connect your cloud services to get started.', 'info');
             
@@ -96,6 +104,22 @@ class DriveBridge {
         document.body.classList.remove('modal-open');
         
         console.log('✅ All modals cleared');
+    }
+
+    initTransferLogSystem() {
+        // Create transfer log panel
+        const logPanel = document.getElementById('transfer-progress');
+        if (logPanel) {
+            // Add clear logs button
+            const header = logPanel.querySelector('h3');
+            if (header && !header.querySelector('.clear-logs-btn')) {
+                const clearBtn = document.createElement('button');
+                clearBtn.className = 'btn btn--ghost btn--small clear-logs-btn';
+                clearBtn.textContent = 'Clear Logs';
+                clearBtn.onclick = () => this.clearTransferLogs();
+                header.appendChild(clearBtn);
+            }
+        }
     }
 
     setupEventListeners() {
@@ -407,6 +431,9 @@ class DriveBridge {
         // Load files from both services
         this.loadGoogleDriveFiles();
         this.loadOneDriveFiles();
+        
+        // Show transfer log panel
+        this.showTransferProgress();
     }
 
     async loadGoogleDriveFiles() {
@@ -430,6 +457,7 @@ class DriveBridge {
                 const data = await response.json();
                 this.state.googleFiles = data.files || [];
                 this.renderFileList('google', this.state.googleFiles);
+                this.renderFolderNavigation('google');
                 console.log('✅ Loaded Google Drive files:', this.state.googleFiles.length);
             } else {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -462,6 +490,7 @@ class DriveBridge {
                 const data = await response.json();
                 this.state.oneDriveFiles = data.value || [];
                 this.renderFileList('onedrive', this.state.oneDriveFiles);
+                this.renderFolderNavigation('onedrive');
                 console.log('✅ Loaded OneDrive files:', this.state.oneDriveFiles.length);
             } else {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -470,6 +499,66 @@ class DriveBridge {
             console.error('Failed to load OneDrive files:', error);
             this.showNotification('Failed to load OneDrive files', 'error');
         }
+    }
+
+    renderFolderNavigation(service) {
+        const breadcrumbElement = document.getElementById(`${service === 'google' ? 'google' : 'onedrive'}-breadcrumb`);
+        if (!breadcrumbElement) return;
+        
+        const folderPath = service === 'google' ? this.state.googleFolderPath : this.state.onedriveFolderPath;
+        
+        const breadcrumbHTML = folderPath.map((folder, index) => {
+            const isLast = index === folderPath.length - 1;
+            return `
+                <span class="breadcrumb__item ${isLast ? 'breadcrumb__item--active' : ''}" 
+                      ${!isLast ? `onclick="app.navigateToFolder('${service}', '${folder.id}', ${index})"` : ''}>
+                    ${folder.name}
+                </span>
+                ${!isLast ? '<span class="breadcrumb__separator">></span>' : ''}
+            `;
+        }).join('');
+        
+        breadcrumbElement.innerHTML = breadcrumbHTML;
+    }
+
+    async navigateToFolder(service, folderId, pathIndex) {
+        if (service === 'google') {
+            this.state.currentGoogleFolder = folderId;
+            this.state.googleFolderPath = this.state.googleFolderPath.slice(0, pathIndex + 1);
+            await this.loadGoogleDriveFiles();
+        } else {
+            this.state.currentOneDriveFolder = folderId;
+            this.state.onedriveFolderPath = this.state.onedriveFolderPath.slice(0, pathIndex + 1);
+            await this.loadOneDriveFiles();
+        }
+        
+        // Clear selections when navigating
+        if (service === 'google') {
+            this.state.selectedGoogleFiles.clear();
+        } else {
+            this.state.selectedOneDriveFiles.clear();
+        }
+        this.updateTransferButtons();
+    }
+
+    async openFolder(service, folderId, folderName) {
+        if (service === 'google') {
+            this.state.currentGoogleFolder = folderId;
+            this.state.googleFolderPath.push({ id: folderId, name: folderName });
+            await this.loadGoogleDriveFiles();
+        } else {
+            this.state.currentOneDriveFolder = folderId;
+            this.state.onedriveFolderPath.push({ id: folderId, name: folderName });
+            await this.loadOneDriveFiles();
+        }
+        
+        // Clear selections when navigating
+        if (service === 'google') {
+            this.state.selectedGoogleFiles.clear();
+        } else {
+            this.state.selectedOneDriveFiles.clear();
+        }
+        this.updateTransferButtons();
     }
 
     renderFileList(service, files) {
@@ -481,11 +570,19 @@ class DriveBridge {
             return;
         }
 
-        const fileItems = files.map(file => {
-            const isFolder = service === 'google' 
-                ? file.mimeType === 'application/vnd.google-apps.folder'
-                : file.folder !== undefined;
-                
+        // Separate folders and files
+        const folders = files.filter(file => this.isFolder(file, service));
+        const regularFiles = files.filter(file => !this.isFolder(file, service));
+        
+        // Sort each category alphabetically
+        folders.sort((a, b) => a.name.localeCompare(b.name));
+        regularFiles.sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Combine folders first, then files
+        const sortedFiles = [...folders, ...regularFiles];
+
+        const fileItems = sortedFiles.map(file => {
+            const isFolder = this.isFolder(file, service);
             const fileSize = file.size ? this.formatFileSize(file.size) : '';
             const modifiedDate = file.modifiedTime || file.lastModifiedDateTime || '';
             const isSelected = service === 'google' 
@@ -495,26 +592,86 @@ class DriveBridge {
             return `
                 <div class="file-item ${isFolder ? 'file-item--folder' : ''} ${isSelected ? 'file-item--selected' : ''}" 
                      data-file-id="${file.id}" data-service="${service}">
-                    <div class="file-icon">
+                    <div class="file-checkbox">
+                        <input type="checkbox" 
+                               id="file-${service}-${file.id}" 
+                               ${isSelected ? 'checked' : ''}
+                               onchange="app.toggleFileSelection('${service}', '${file.id}')">
+                    </div>
+                    <div class="file-icon" ${isFolder ? `onclick="app.openFolder('${service}', '${file.id}', '${file.name.replace(/'/g, '\\\'')}')"` : ''}>
                         ${this.getFileIcon(file)}
                     </div>
-                    <div class="file-info">
+                    <div class="file-info" ${isFolder ? `onclick="app.openFolder('${service}', '${file.id}', '${file.name.replace(/'/g, '\\\'')}')"` : ''}>
                         <div class="file-name">${file.name}</div>
                         <div class="file-meta">
                             ${fileSize} ${modifiedDate ? '• ' + new Date(modifiedDate).toLocaleDateString() : ''}
                         </div>
                     </div>
                     <div class="file-actions">
-                        <button class="btn btn--ghost btn--small" onclick="app.selectFile('${service}', '${file.id}')">
-                            ${isSelected ? 'Deselect' : 'Select'}
-                        </button>
-                        ${!isFolder ? `<button class="btn btn--ghost btn--small" onclick="app.downloadFile('${service}', '${file.id}', '${file.name}')">Download</button>` : ''}
+                        ${!isFolder ? `<button class="btn btn--ghost btn--small" onclick="app.downloadFile('${service}', '${file.id}', '${file.name.replace(/'/g, '\\\'')}')" title="Download">⬇️</button>` : ''}
+                        <button class="btn btn--ghost btn--small" onclick="app.getShareLink('${service}', '${file.id}', '${file.name.replace(/'/g, '\\\'')}')" title="Share">🔗</button>
                     </div>
                 </div>
             `;
         }).join('');
 
         fileListElement.innerHTML = fileItems;
+    }
+
+    isFolder(file, service) {
+        if (service === 'google') {
+            return file.mimeType === 'application/vnd.google-apps.folder';
+        } else {
+            return file.folder !== undefined;
+        }
+    }
+
+    toggleFileSelection(service, fileId) {
+        const selectedSet = service === 'google' ? this.state.selectedGoogleFiles : this.state.selectedOneDriveFiles;
+        
+        if (selectedSet.has(fileId)) {
+            selectedSet.delete(fileId);
+            console.log(`Deselected ${service} file: ${fileId}`);
+        } else {
+            selectedSet.add(fileId);
+            console.log(`Selected ${service} file: ${fileId}`);
+        }
+        
+        // Update file item appearance
+        const fileItem = document.querySelector(`[data-file-id="${fileId}"][data-service="${service}"]`);
+        if (fileItem) {
+            if (selectedSet.has(fileId)) {
+                fileItem.classList.add('file-item--selected');
+            } else {
+                fileItem.classList.remove('file-item--selected');
+            }
+        }
+        
+        this.updateTransferButtons();
+    }
+
+    // Select all files in current view
+    selectAllFiles(service) {
+        const files = service === 'google' ? this.state.googleFiles : this.state.oneDriveFiles;
+        const selectedSet = service === 'google' ? this.state.selectedGoogleFiles : this.state.selectedOneDriveFiles;
+        
+        files.forEach(file => selectedSet.add(file.id));
+        
+        // Re-render to show selections
+        this.renderFileList(service, files);
+        this.updateTransferButtons();
+    }
+
+    // Clear all selections
+    clearAllSelections(service) {
+        const selectedSet = service === 'google' ? this.state.selectedGoogleFiles : this.state.selectedOneDriveFiles;
+        const files = service === 'google' ? this.state.googleFiles : this.state.oneDriveFiles;
+        
+        selectedSet.clear();
+        
+        // Re-render to clear selections
+        this.renderFileList(service, files);
+        this.updateTransferButtons();
     }
 
     getFileIcon(file) {
@@ -559,28 +716,6 @@ class DriveBridge {
         return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     }
 
-    selectFile(service, fileId) {
-        const selectedSet = service === 'google' ? this.state.selectedGoogleFiles : this.state.selectedOneDriveFiles;
-        
-        if (selectedSet.has(fileId)) {
-            selectedSet.delete(fileId);
-            console.log(`Deselected ${service} file: ${fileId}`);
-        } else {
-            selectedSet.add(fileId);
-            console.log(`Selected ${service} file: ${fileId}`);
-        }
-        
-        // Re-render the file list to show selection changes
-        if (service === 'google') {
-            this.renderFileList('google', this.state.googleFiles);
-        } else {
-            this.renderFileList('onedrive', this.state.oneDriveFiles);
-        }
-        
-        // Update transfer button states
-        this.updateTransferButtons();
-    }
-
     updateTransferButtons() {
         const transferToOneDriveBtn = document.getElementById('transfer-to-onedrive');
         const transferToGoogleBtn = document.getElementById('transfer-to-google');
@@ -611,28 +746,41 @@ class DriveBridge {
         }
         
         console.log(`🚀 Starting transfer of ${selectedFiles.size} files from ${from} to ${to}`);
-        this.showNotification(`Starting transfer of ${selectedFiles.size} file(s)...`, 'info');
+        this.addTransferLog(`Starting transfer of ${selectedFiles.size} files from ${from} to ${to}`, 'info');
         
         // Show transfer progress panel
         this.showTransferProgress();
         
-        let successCount = 0;
-        let failCount = 0;
+        // Process files in batches
+        const fileArray = Array.from(selectedFiles);
+        const batches = this.createBatches(fileArray, this.state.batchSize);
         
-        for (const fileId of selectedFiles) {
-            try {
-                const success = await this.transferSingleFile(fileId, from, to);
-                if (success) {
-                    successCount++;
-                    this.updateTransferProgress(fileId, from, to, 'completed', 100);
+        let totalSuccess = 0;
+        let totalFailed = 0;
+        
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+            this.addTransferLog(`Processing batch ${batchIndex + 1} of ${batches.length} (${batch.length} files)`, 'info');
+            
+            // Process batch files concurrently but with a delay between batches
+            const batchPromises = batch.map(fileId => this.transferSingleFile(fileId, from, to));
+            const results = await Promise.allSettled(batchPromises);
+            
+            // Count results
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value) {
+                    totalSuccess++;
                 } else {
-                    failCount++;
-                    this.updateTransferProgress(fileId, from, to, 'failed', 0);
+                    totalFailed++;
+                    const fileId = batch[index];
+                    const fileInfo = this.getFileInfo(fileId, from);
+                    this.addTransferLog(`Failed to transfer: ${fileInfo?.name || fileId} - ${result.reason || 'Unknown error'}`, 'error');
                 }
-            } catch (error) {
-                console.error(`Failed to transfer file ${fileId}:`, error);
-                failCount++;
-                this.updateTransferProgress(fileId, from, to, 'failed', 0);
+            });
+            
+            // Add delay between batches to avoid rate limiting
+            if (batchIndex < batches.length - 1) {
+                await this.delay(2000); // 2 second delay between batches
             }
         }
         
@@ -645,13 +793,26 @@ class DriveBridge {
         this.renderFileList('onedrive', this.state.oneDriveFiles);
         
         // Show final results
-        const message = `Transfer complete! ✅ ${successCount} successful, ❌ ${failCount} failed`;
-        this.showNotification(message, successCount > 0 ? 'success' : 'error');
+        const message = `Transfer complete! ✅ ${totalSuccess} successful, ❌ ${totalFailed} failed`;
+        this.addTransferLog(message, totalSuccess > 0 ? 'success' : 'error');
+        this.showNotification(message, totalSuccess > 0 ? 'success' : 'error');
         
         // Refresh file lists to show new files
         setTimeout(() => {
             this.refreshFiles();
-        }, 2000);
+        }, 3000);
+    }
+
+    createBatches(array, batchSize) {
+        const batches = [];
+        for (let i = 0; i < array.length; i += batchSize) {
+            batches.push(array.slice(i, i + batchSize));
+        }
+        return batches;
+    }
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async transferSingleFile(fileId, from, to) {
@@ -664,7 +825,20 @@ class DriveBridge {
                 throw new Error('File not found');
             }
             
+            // Check if it's a folder
+            if (this.isFolder(fileInfo, from)) {
+                return await this.transferFolder(fileInfo, from, to);
+            }
+            
+            // Check file size
+            if (fileInfo.size && fileInfo.size > this.state.maxFileSize) {
+                const sizeMB = Math.round(fileInfo.size / (1024 * 1024));
+                const maxSizeMB = Math.round(this.state.maxFileSize / (1024 * 1024));
+                throw new Error(`File too large: ${sizeMB}MB exceeds limit of ${maxSizeMB}MB`);
+            }
+            
             this.updateTransferProgress(fileId, from, to, 'downloading', 10);
+            this.addTransferLog(`Downloading: ${fileInfo.name}`, 'info');
             
             // Step 2: Download file
             const fileBlob = await this.downloadFileBlob(fileId, from);
@@ -672,9 +846,13 @@ class DriveBridge {
             
             // Step 3: Upload to destination
             this.updateTransferProgress(fileId, from, to, 'uploading', 75);
+            this.addTransferLog(`Uploading: ${fileInfo.name}`, 'info');
+            
             const uploadSuccess = await this.uploadFileBlob(fileBlob, fileInfo.name, to);
             
             if (uploadSuccess) {
+                this.updateTransferProgress(fileId, from, to, 'completed', 100);
+                this.addTransferLog(`✅ Successfully transferred: ${fileInfo.name}`, 'success');
                 console.log(`✅ Successfully transferred: ${fileInfo.name}`);
                 return true;
             } else {
@@ -683,8 +861,129 @@ class DriveBridge {
             
         } catch (error) {
             console.error(`❌ Transfer failed for ${fileId}:`, error);
+            this.updateTransferProgress(fileId, from, to, 'failed', 0);
+            
+            const fileInfo = this.getFileInfo(fileId, from);
+            this.addTransferLog(`❌ Failed to transfer: ${fileInfo?.name || fileId} - ${error.message}`, 'error');
+            
             return false;
         }
+    }
+
+    async transferFolder(folderInfo, from, to) {
+        try {
+            this.addTransferLog(`📁 Creating folder: ${folderInfo.name}`, 'info');
+            
+            // Create folder in destination
+            const newFolderId = await this.createFolder(folderInfo.name, to);
+            if (!newFolderId) {
+                throw new Error('Failed to create folder');
+            }
+            
+            // Get folder contents
+            const folderContents = await this.getFolderContents(folderInfo.id, from);
+            
+            if (folderContents.length === 0) {
+                this.addTransferLog(`✅ Empty folder created: ${folderInfo.name}`, 'success');
+                return true;
+            }
+            
+            // Transfer folder contents recursively
+            let successCount = 0;
+            for (const item of folderContents) {
+                try {
+                    const success = await this.transferSingleFile(item.id, from, to);
+                    if (success) successCount++;
+                } catch (error) {
+                    this.addTransferLog(`❌ Failed to transfer folder item: ${item.name} - ${error.message}`, 'error');
+                }
+            }
+            
+            this.addTransferLog(`📁 Folder transfer complete: ${folderInfo.name} (${successCount}/${folderContents.length} items)`, 'success');
+            return true;
+            
+        } catch (error) {
+            this.addTransferLog(`❌ Failed to transfer folder: ${folderInfo.name} - ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    async createFolder(folderName, service) {
+        try {
+            if (service === 'onedrive') {
+                const response = await fetch('https://graph.microsoft.com/v1.0/me/drive/root/children', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.microsoftToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: folderName,
+                        folder: {}
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.id;
+                }
+            } else {
+                const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.googleToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: folderName,
+                        mimeType: 'application/vnd.google-apps.folder',
+                        parents: [this.state.currentGoogleFolder]
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.id;
+                }
+            }
+        } catch (error) {
+            console.error('Create folder error:', error);
+        }
+        return null;
+    }
+
+    async getFolderContents(folderId, service) {
+        try {
+            if (service === 'google') {
+                const response = await fetch(
+                    `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,size,mimeType,modifiedTime,parents)`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.googleToken}`
+                        }
+                    }
+                );
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.files || [];
+                }
+            } else {
+                const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.state.microsoftToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.value || [];
+                }
+            }
+        } catch (error) {
+            console.error('Get folder contents error:', error);
+        }
+        return [];
     }
 
     async getFileInfo(fileId, service) {
@@ -764,14 +1063,6 @@ class DriveBridge {
         const progressPanel = document.getElementById('transfer-progress');
         if (progressPanel) {
             progressPanel.style.display = 'block';
-            
-            // Auto-hide after 30 seconds of inactivity
-            setTimeout(() => {
-                if (progressPanel.style.display !== 'none') {
-                    progressPanel.style.display = 'none';
-                    document.getElementById('transfer-list').innerHTML = '';
-                }
-            }, 30000);
         }
     }
 
@@ -811,20 +1102,73 @@ class DriveBridge {
             </div>
         `;
         
-        // Remove completed/failed items after 10 seconds
-        if (status === 'completed' || status === 'failed') {
-            setTimeout(() => {
-                if (progressItem.parentNode) {
-                    progressItem.parentNode.removeChild(progressItem);
-                }
-            }, 10000);
+        // Keep completed/failed items visible (don't auto-remove)
+    }
+
+    addTransferLog(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = {
+            timestamp,
+            message,
+            type,
+            id: Date.now() + Math.random()
+        };
+        
+        this.state.transferLogs.push(logEntry);
+        
+        // Keep only last 100 log entries to prevent memory issues
+        if (this.state.transferLogs.length > 100) {
+            this.state.transferLogs = this.state.transferLogs.slice(-50);
+        }
+        
+        this.renderTransferLogs();
+    }
+
+    renderTransferLogs() {
+        const logContainer = document.getElementById('transfer-list');
+        if (!logContainer) return;
+        
+        // Create or update log display
+        let logDisplay = document.getElementById('transfer-logs');
+        if (!logDisplay) {
+            logDisplay = document.createElement('div');
+            logDisplay.id = 'transfer-logs';
+            logDisplay.className = 'transfer-logs';
+            logContainer.appendChild(logDisplay);
+        }
+        
+        const logsHTML = this.state.transferLogs.slice(-20).map(log => `
+            <div class="log-entry log-entry--${log.type}">
+                <span class="log-timestamp">${log.timestamp}</span>
+                <span class="log-message">${log.message}</span>
+            </div>
+        `).join('');
+        
+        logDisplay.innerHTML = logsHTML;
+        
+        // Auto-scroll to bottom
+        logDisplay.scrollTop = logDisplay.scrollHeight;
+    }
+
+    clearTransferLogs() {
+        this.state.transferLogs = [];
+        const logDisplay = document.getElementById('transfer-logs');
+        if (logDisplay) {
+            logDisplay.innerHTML = '<div class="log-entry log-entry--info"><span class="log-message">Logs cleared</span></div>';
+        }
+        
+        // Also clear progress items
+        const progressList = document.getElementById('transfer-list');
+        if (progressList) {
+            const progressItems = progressList.querySelectorAll('.transfer-item');
+            progressItems.forEach(item => item.remove());
         }
     }
 
     async downloadFile(service, fileId, fileName) {
         try {
             console.log(`Downloading ${fileName} from ${service}`);
-            this.showNotification(`Downloading ${fileName}...`, 'info');
+            this.addTransferLog(`Downloading ${fileName} from ${service}`, 'info');
             
             const fileBlob = await this.downloadFileBlob(fileId, service);
             
@@ -839,11 +1183,67 @@ class DriveBridge {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
-            this.showNotification(`Downloaded ${fileName} successfully!`, 'success');
+            this.addTransferLog(`✅ Downloaded ${fileName} successfully`, 'success');
             
         } catch (error) {
             console.error('Download failed:', error);
-            this.showNotification(`Failed to download ${fileName}`, 'error');
+            this.addTransferLog(`❌ Failed to download ${fileName}: ${error.message}`, 'error');
+        }
+    }
+
+    async getShareLink(service, fileId, fileName) {
+        try {
+            this.addTransferLog(`Generating share link for ${fileName}`, 'info');
+            
+            let shareUrl = '';
+            
+            if (service === 'google') {
+                // Make file public and get share link
+                await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.googleToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        role: 'reader',
+                        type: 'anyone'
+                    })
+                });
+                
+                shareUrl = `https://drive.google.com/file/d/${fileId}/view`;
+            } else {
+                // Get OneDrive sharing link
+                const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/createLink`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.microsoftToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: 'view',
+                        scope: 'anonymous'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    shareUrl = data.link.webUrl;
+                }
+            }
+            
+            if (shareUrl) {
+                // Copy to clipboard
+                await navigator.clipboard.writeText(shareUrl);
+                this.addTransferLog(`✅ Share link copied to clipboard for ${fileName}`, 'success');
+                this.showNotification(`Share link copied to clipboard for ${fileName}`, 'success');
+            } else {
+                throw new Error('Failed to generate share link');
+            }
+            
+        } catch (error) {
+            console.error('Share link generation failed:', error);
+            this.addTransferLog(`❌ Failed to generate share link for ${fileName}: ${error.message}`, 'error');
         }
     }
 
@@ -860,11 +1260,13 @@ class DriveBridge {
         );
         
         this.renderFileList(service, filteredFiles);
+        this.addTransferLog(`Search results: ${filteredFiles.length} files found for "${query}" in ${service}`, 'info');
     }
 
     refreshFiles() {
         this.loadGoogleDriveFiles();
         this.loadOneDriveFiles();
+        this.addTransferLog('File lists refreshed', 'info');
         this.showNotification('Files refreshed', 'success');
     }
 
@@ -878,6 +1280,10 @@ class DriveBridge {
         this.state.microsoftToken = null;
         this.state.selectedGoogleFiles.clear();
         this.state.selectedOneDriveFiles.clear();
+        this.state.currentGoogleFolder = 'root';
+        this.state.currentOneDriveFolder = 'root';
+        this.state.googleFolderPath = [{ id: 'root', name: 'Root' }];
+        this.state.onedriveFolderPath = [{ id: 'root', name: 'Root' }];
         
         // Update UI
         this.updateConnectionStatus('google', false);
@@ -894,6 +1300,7 @@ class DriveBridge {
             progressPanel.style.display = 'none';
         }
         
+        this.addTransferLog('Disconnected from all services', 'info');
         this.showNotification('Disconnected from all services', 'info');
     }
 
