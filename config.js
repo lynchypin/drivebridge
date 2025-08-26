@@ -36,7 +36,7 @@ class Config {
         }
         
         // Fallback - replace with your actual GitHub Pages URL
-        return 'https://YOUR_GITHUB_USERNAME.github.io/drivebridge';
+        return 'https://lynchypin.github.io/drivebridge';
     }
     
     static getApiEndpoints() {
