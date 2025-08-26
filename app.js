@@ -55,6 +55,9 @@ class DriveBridge {
         try {
             console.log('Initializing DriveBridge...');
             
+            // Clear any stuck modals immediately
+            this.clearAllModals();
+            
             // Set up event listeners first
             this.setupEventListeners();
             
@@ -71,6 +74,28 @@ class DriveBridge {
             console.error('Initialization failed:', error);
             this.showNotification('Failed to initialize DriveBridge. Please refresh the page.', 'error');
         }
+    }
+
+    clearAllModals() {
+        console.log('Clearing all modals and overlays...');
+        
+        // Force close all modals
+        document.querySelectorAll('.modal, .popup, [id*="modal"], [id*="popup"]').forEach(el => {
+            el.style.display = 'none';
+            el.classList.add('hidden');
+        });
+        
+        // Clear overlays
+        document.querySelectorAll('.modal-backdrop, .overlay, .modal-overlay').forEach(el => {
+            el.style.display = 'none';
+            el.classList.add('hidden');
+        });
+        
+        // Reset body
+        document.body.style.overflow = 'auto';
+        document.body.classList.remove('modal-open');
+        
+        console.log('✅ All modals cleared');
     }
 
     setupEventListeners() {
@@ -117,6 +142,17 @@ class DriveBridge {
             transferToGoogleBtn.addEventListener('click', () => this.transferSelectedFiles('onedrive', 'google'));
         }
         
+        // Search functionality
+        const googleSearch = document.getElementById('google-search');
+        if (googleSearch) {
+            googleSearch.addEventListener('input', (e) => this.searchFiles('google', e.target.value));
+        }
+        
+        const onedriveSearch = document.getElementById('onedrive-search');
+        if (onedriveSearch) {
+            onedriveSearch.addEventListener('input', (e) => this.searchFiles('onedrive', e.target.value));
+        }
+        
         console.log('Event listeners setup complete');
     }
 
@@ -125,20 +161,8 @@ class DriveBridge {
             // Wait for Google Identity Services to load
             await this.waitForGoogleAPI();
             
-            // Initialize Microsoft MSAL
-            if (typeof msal !== 'undefined') {
-                this.state.msalInstance = new msal.PublicClientApplication({
-                    auth: {
-                        clientId: this.config.microsoft.clientId,
-                        authority: this.config.microsoft.authority,
-                        redirectUri: this.config.microsoft.redirectUri
-                    },
-                    cache: {
-                        cacheLocation: 'sessionStorage'
-                    }
-                });
-                console.log('✅ Microsoft MSAL initialized');
-            }
+            // Wait for Microsoft MSAL to load
+            await this.waitForMSAL();
             
         } catch (error) {
             console.error('API initialization failed:', error);
@@ -156,6 +180,46 @@ class DriveBridge {
                 }
             };
             checkGoogle();
+            
+            // Timeout after 10 seconds
+            setTimeout(() => {
+                reject(new Error('Google Identity Services failed to load'));
+            }, 10000);
+        });
+    }
+
+    waitForMSAL() {
+        return new Promise((resolve, reject) => {
+            const checkMSAL = () => {
+                if (typeof msal !== 'undefined' && msal.PublicClientApplication) {
+                    try {
+                        this.state.msalInstance = new msal.PublicClientApplication({
+                            auth: {
+                                clientId: this.config.microsoft.clientId,
+                                authority: this.config.microsoft.authority,
+                                redirectUri: this.config.microsoft.redirectUri
+                            },
+                            cache: {
+                                cacheLocation: 'sessionStorage'
+                            }
+                        });
+                        console.log('✅ Microsoft MSAL initialized');
+                        resolve();
+                    } catch (error) {
+                        console.error('❌ MSAL initialization error:', error);
+                        reject(error);
+                    }
+                } else {
+                    setTimeout(checkMSAL, 100);
+                }
+            };
+            
+            checkMSAL();
+            
+            // Timeout after 10 seconds
+            setTimeout(() => {
+                reject(new Error('MSAL library failed to load'));
+            }, 10000);
         });
     }
 
@@ -218,6 +282,9 @@ class DriveBridge {
             if (!this.state.msalInstance) {
                 throw new Error('Microsoft MSAL not initialized');
             }
+            
+            // Clear any existing tokens
+            sessionStorage.removeItem('microsoft_token');
             
             const loginRequest = {
                 scopes: this.config.microsoft.scopes
@@ -349,8 +416,9 @@ class DriveBridge {
         }
 
         try {
+            console.log('Loading Google Drive files...');
             const response = await fetch(
-                `https://www.googleapis.com/drive/v3/files?q='${this.state.currentGoogleFolder}' in parents and trashed=false&fields=files(id,name,size,mimeType,modifiedTime,parents,webViewLink)`,
+                `https://www.googleapis.com/drive/v3/files?q='${this.state.currentGoogleFolder}' in parents and trashed=false&fields=files(id,name,size,mimeType,modifiedTime,parents,webViewLink)&pageSize=1000`,
                 {
                     headers: {
                         'Authorization': `Bearer ${this.state.googleToken}`
@@ -362,7 +430,7 @@ class DriveBridge {
                 const data = await response.json();
                 this.state.googleFiles = data.files || [];
                 this.renderFileList('google', this.state.googleFiles);
-                console.log('✅ Loaded real Google Drive files:', this.state.googleFiles.length);
+                console.log('✅ Loaded Google Drive files:', this.state.googleFiles.length);
             } else {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -379,6 +447,7 @@ class DriveBridge {
         }
 
         try {
+            console.log('Loading OneDrive files...');
             const endpoint = this.state.currentOneDriveFolder === 'root' 
                 ? 'https://graph.microsoft.com/v1.0/me/drive/root/children'
                 : `https://graph.microsoft.com/v1.0/me/drive/items/${this.state.currentOneDriveFolder}/children`;
@@ -393,7 +462,7 @@ class DriveBridge {
                 const data = await response.json();
                 this.state.oneDriveFiles = data.value || [];
                 this.renderFileList('onedrive', this.state.oneDriveFiles);
-                console.log('✅ Loaded real OneDrive files:', this.state.oneDriveFiles.length);
+                console.log('✅ Loaded OneDrive files:', this.state.oneDriveFiles.length);
             } else {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -419,9 +488,13 @@ class DriveBridge {
                 
             const fileSize = file.size ? this.formatFileSize(file.size) : '';
             const modifiedDate = file.modifiedTime || file.lastModifiedDateTime || '';
+            const isSelected = service === 'google' 
+                ? this.state.selectedGoogleFiles.has(file.id)
+                : this.state.selectedOneDriveFiles.has(file.id);
             
             return `
-                <div class="file-item ${isFolder ? 'file-item--folder' : ''}" data-file-id="${file.id}">
+                <div class="file-item ${isFolder ? 'file-item--folder' : ''} ${isSelected ? 'file-item--selected' : ''}" 
+                     data-file-id="${file.id}" data-service="${service}">
                     <div class="file-icon">
                         ${this.getFileIcon(file)}
                     </div>
@@ -433,8 +506,9 @@ class DriveBridge {
                     </div>
                     <div class="file-actions">
                         <button class="btn btn--ghost btn--small" onclick="app.selectFile('${service}', '${file.id}')">
-                            Select
+                            ${isSelected ? 'Deselect' : 'Select'}
                         </button>
+                        ${!isFolder ? `<button class="btn btn--ghost btn--small" onclick="app.downloadFile('${service}', '${file.id}', '${file.name}')">Download</button>` : ''}
                     </div>
                 </div>
             `;
@@ -444,19 +518,35 @@ class DriveBridge {
     }
 
     getFileIcon(file) {
-        // Simple file type detection - you can enhance this
+        // Enhanced file type detection
         if (file.mimeType === 'application/vnd.google-apps.folder' || file.folder) {
             return '📁';
         }
         
         const name = file.name.toLowerCase();
-        if (name.includes('.pdf')) return '📄';
-        if (name.includes('.doc') || name.includes('.docx')) return '📝';
-        if (name.includes('.xls') || name.includes('.xlsx')) return '📊';
-        if (name.includes('.ppt') || name.includes('.pptx')) return '📈';
-        if (name.includes('.jpg') || name.includes('.png') || name.includes('.gif')) return '🖼️';
-        if (name.includes('.mp4') || name.includes('.avi')) return '🎥';
-        if (name.includes('.mp3') || name.includes('.wav')) return '🎵';
+        const mimeType = file.mimeType || '';
+        
+        // Images
+        if (name.match(/\.(jpg|jpeg|png|gif|bmp|svg|webp)$/) || mimeType.startsWith('image/')) return '🖼️';
+        
+        // Documents
+        if (name.match(/\.(pdf)$/) || mimeType.includes('pdf')) return '📄';
+        if (name.match(/\.(doc|docx)$/) || mimeType.includes('document')) return '📝';
+        if (name.match(/\.(xls|xlsx|csv)$/) || mimeType.includes('spreadsheet')) return '📊';
+        if (name.match(/\.(ppt|pptx)$/) || mimeType.includes('presentation')) return '📈';
+        
+        // Media
+        if (name.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv)$/) || mimeType.startsWith('video/')) return '🎥';
+        if (name.match(/\.(mp3|wav|flac|aac|ogg|m4a)$/) || mimeType.startsWith('audio/')) return '🎵';
+        
+        // Archives
+        if (name.match(/\.(zip|rar|7z|tar|gz)$/)) return '🗜️';
+        
+        // Code files
+        if (name.match(/\.(js|html|css|py|java|cpp|c|php|rb)$/)) return '💻';
+        
+        // Text files
+        if (name.match(/\.(txt|md|rtf)$/) || mimeType.startsWith('text/')) return '📃';
         
         return '📄';
     }
@@ -464,7 +554,7 @@ class DriveBridge {
     formatFileSize(bytes) {
         if (!bytes) return '';
         
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     }
@@ -474,8 +564,17 @@ class DriveBridge {
         
         if (selectedSet.has(fileId)) {
             selectedSet.delete(fileId);
+            console.log(`Deselected ${service} file: ${fileId}`);
         } else {
             selectedSet.add(fileId);
+            console.log(`Selected ${service} file: ${fileId}`);
+        }
+        
+        // Re-render the file list to show selection changes
+        if (service === 'google') {
+            this.renderFileList('google', this.state.googleFiles);
+        } else {
+            this.renderFileList('onedrive', this.state.oneDriveFiles);
         }
         
         // Update transfer button states
@@ -487,11 +586,19 @@ class DriveBridge {
         const transferToGoogleBtn = document.getElementById('transfer-to-google');
         
         if (transferToOneDriveBtn) {
-            transferToOneDriveBtn.disabled = this.state.selectedGoogleFiles.size === 0;
+            const count = this.state.selectedGoogleFiles.size;
+            transferToOneDriveBtn.disabled = count === 0;
+            transferToOneDriveBtn.textContent = count > 0 
+                ? `Transfer ${count} Selected to OneDrive →`
+                : 'Transfer Selected to OneDrive →';
         }
         
         if (transferToGoogleBtn) {
-            transferToGoogleBtn.disabled = this.state.selectedOneDriveFiles.size === 0;
+            const count = this.state.selectedOneDriveFiles.size;
+            transferToGoogleBtn.disabled = count === 0;
+            transferToGoogleBtn.textContent = count > 0
+                ? `← Transfer ${count} Selected to Google Drive`
+                : '← Transfer Selected to Google Drive';
         }
     }
 
@@ -503,15 +610,256 @@ class DriveBridge {
             return;
         }
         
+        console.log(`🚀 Starting transfer of ${selectedFiles.size} files from ${from} to ${to}`);
         this.showNotification(`Starting transfer of ${selectedFiles.size} file(s)...`, 'info');
         
-        // Here you would implement the actual file transfer logic
-        // For now, just show a success message
+        // Show transfer progress panel
+        this.showTransferProgress();
+        
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const fileId of selectedFiles) {
+            try {
+                const success = await this.transferSingleFile(fileId, from, to);
+                if (success) {
+                    successCount++;
+                    this.updateTransferProgress(fileId, from, to, 'completed', 100);
+                } else {
+                    failCount++;
+                    this.updateTransferProgress(fileId, from, to, 'failed', 0);
+                }
+            } catch (error) {
+                console.error(`Failed to transfer file ${fileId}:`, error);
+                failCount++;
+                this.updateTransferProgress(fileId, from, to, 'failed', 0);
+            }
+        }
+        
+        // Clear selections
+        selectedFiles.clear();
+        this.updateTransferButtons();
+        
+        // Re-render file lists to clear selections
+        this.renderFileList('google', this.state.googleFiles);
+        this.renderFileList('onedrive', this.state.oneDriveFiles);
+        
+        // Show final results
+        const message = `Transfer complete! ✅ ${successCount} successful, ❌ ${failCount} failed`;
+        this.showNotification(message, successCount > 0 ? 'success' : 'error');
+        
+        // Refresh file lists to show new files
         setTimeout(() => {
-            this.showNotification(`Successfully transferred ${selectedFiles.size} file(s)!`, 'success');
-            selectedFiles.clear();
-            this.updateTransferButtons();
+            this.refreshFiles();
         }, 2000);
+    }
+
+    async transferSingleFile(fileId, from, to) {
+        console.log(`📁 Transferring file ${fileId} from ${from} to ${to}`);
+        
+        try {
+            // Step 1: Get file info
+            const fileInfo = await this.getFileInfo(fileId, from);
+            if (!fileInfo) {
+                throw new Error('File not found');
+            }
+            
+            this.updateTransferProgress(fileId, from, to, 'downloading', 10);
+            
+            // Step 2: Download file
+            const fileBlob = await this.downloadFileBlob(fileId, from);
+            this.updateTransferProgress(fileId, from, to, 'downloading', 50);
+            
+            // Step 3: Upload to destination
+            this.updateTransferProgress(fileId, from, to, 'uploading', 75);
+            const uploadSuccess = await this.uploadFileBlob(fileBlob, fileInfo.name, to);
+            
+            if (uploadSuccess) {
+                console.log(`✅ Successfully transferred: ${fileInfo.name}`);
+                return true;
+            } else {
+                throw new Error('Upload failed');
+            }
+            
+        } catch (error) {
+            console.error(`❌ Transfer failed for ${fileId}:`, error);
+            return false;
+        }
+    }
+
+    async getFileInfo(fileId, service) {
+        if (service === 'google') {
+            const files = this.state.googleFiles;
+            return files.find(f => f.id === fileId);
+        } else {
+            const files = this.state.oneDriveFiles;
+            return files.find(f => f.id === fileId);
+        }
+    }
+
+    async downloadFileBlob(fileId, service) {
+        if (service === 'google') {
+            const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+                headers: { 'Authorization': `Bearer ${this.state.googleToken}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to download from Google Drive: ${response.status}`);
+            }
+            
+            return await response.blob();
+        } else {
+            const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`, {
+                headers: { 'Authorization': `Bearer ${this.state.microsoftToken}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to download from OneDrive: ${response.status}`);
+            }
+            
+            return await response.blob();
+        }
+    }
+
+    async uploadFileBlob(fileBlob, fileName, service) {
+        try {
+            if (service === 'onedrive') {
+                // Upload to OneDrive
+                const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURIComponent(fileName)}:/content`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.microsoftToken}`,
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: fileBlob
+                });
+                return response.ok;
+            } else {
+                // Upload to Google Drive
+                const metadata = {
+                    name: fileName,
+                    parents: [this.state.currentGoogleFolder]
+                };
+                
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+                form.append('file', fileBlob);
+                
+                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.googleToken}`
+                    },
+                    body: form
+                });
+                return response.ok;
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            return false;
+        }
+    }
+
+    showTransferProgress() {
+        const progressPanel = document.getElementById('transfer-progress');
+        if (progressPanel) {
+            progressPanel.style.display = 'block';
+            
+            // Auto-hide after 30 seconds of inactivity
+            setTimeout(() => {
+                if (progressPanel.style.display !== 'none') {
+                    progressPanel.style.display = 'none';
+                    document.getElementById('transfer-list').innerHTML = '';
+                }
+            }, 30000);
+        }
+    }
+
+    updateTransferProgress(fileId, from, to, status, progress = 0) {
+        const progressList = document.getElementById('transfer-list');
+        if (!progressList) return;
+        
+        let progressItem = document.getElementById(`transfer-${fileId}`);
+        if (!progressItem) {
+            progressItem = document.createElement('div');
+            progressItem.id = `transfer-${fileId}`;
+            progressItem.className = 'transfer-item';
+            progressList.appendChild(progressItem);
+        }
+        
+        const statusEmoji = {
+            'downloading': '⬇️',
+            'uploading': '⬆️',
+            'completed': '✅',
+            'failed': '❌'
+        };
+        
+        const fileInfo = this.getFileInfo(fileId, from);
+        const fileName = fileInfo?.name || `File ${fileId}`;
+        
+        progressItem.innerHTML = `
+            <div class="transfer-item__info">
+                <span class="transfer-item__status">${statusEmoji[status] || '📄'}</span>
+                <span class="transfer-item__name">${fileName}</span>
+                <span class="transfer-item__direction">${from} → ${to}</span>
+            </div>
+            <div class="transfer-item__progress">
+                <div class="progress-bar">
+                    <div class="progress-bar__fill" style="width: ${progress}%"></div>
+                </div>
+                <span class="progress-text">${status} (${progress}%)</span>
+            </div>
+        `;
+        
+        // Remove completed/failed items after 10 seconds
+        if (status === 'completed' || status === 'failed') {
+            setTimeout(() => {
+                if (progressItem.parentNode) {
+                    progressItem.parentNode.removeChild(progressItem);
+                }
+            }, 10000);
+        }
+    }
+
+    async downloadFile(service, fileId, fileName) {
+        try {
+            console.log(`Downloading ${fileName} from ${service}`);
+            this.showNotification(`Downloading ${fileName}...`, 'info');
+            
+            const fileBlob = await this.downloadFileBlob(fileId, service);
+            
+            // Create download link
+            const url = window.URL.createObjectURL(fileBlob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            this.showNotification(`Downloaded ${fileName} successfully!`, 'success');
+            
+        } catch (error) {
+            console.error('Download failed:', error);
+            this.showNotification(`Failed to download ${fileName}`, 'error');
+        }
+    }
+
+    searchFiles(service, query) {
+        const files = service === 'google' ? this.state.googleFiles : this.state.oneDriveFiles;
+        
+        if (!query.trim()) {
+            this.renderFileList(service, files);
+            return;
+        }
+        
+        const filteredFiles = files.filter(file => 
+            file.name.toLowerCase().includes(query.toLowerCase())
+        );
+        
+        this.renderFileList(service, filteredFiles);
     }
 
     refreshFiles() {
@@ -539,6 +887,12 @@ class DriveBridge {
         // Go back to auth view
         document.getElementById('dashboard-view').style.display = 'none';
         document.getElementById('auth-view').style.display = 'block';
+        
+        // Hide transfer progress
+        const progressPanel = document.getElementById('transfer-progress');
+        if (progressPanel) {
+            progressPanel.style.display = 'none';
+        }
         
         this.showNotification('Disconnected from all services', 'info');
     }
