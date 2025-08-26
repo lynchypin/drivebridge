@@ -20,9 +20,9 @@ class Config {
     }
     
     static getRedirectUri() {
-        // Automatically detect the current domain
-        return window.location.origin;
-    }
+    // Always return the full drivebridge URL
+    return 'https://lynchypin.github.io/drivebridge';
+}
 }
 
 // Export for use in app.js
