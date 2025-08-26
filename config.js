@@ -1,4 +1,4 @@
-/ config.js - Configuration management for DriveBridge for production
+// config.js - Configuration management for DriveBridge for production
         return 'https://lynchypin.github.io/drivebridge';
     }
     
