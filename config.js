@@ -1176,3 +1176,4 @@ if (document.readyState === 'loading') {
 } else {
     console.log('DOM already loaded - Creating DriveBridge instance...');
     app = new DriveBridge();
+}
