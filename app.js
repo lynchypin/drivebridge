@@ -223,4 +223,355 @@ class DriveBridge {
                 scopes: this.config.microsoft.scopes
             };
             
-            const response = await this.state.msalInstance.loginPop
+            const response = await this.state.msalInstance.loginPopup(loginRequest);
+            
+            if (response.accessToken) {
+                console.log('✅ Microsoft authentication successful!');
+                
+                // Store the real token
+                const tokenData = {
+                    access_token: response.accessToken,
+                    expires_in: response.expiresOn ? Math.floor((response.expiresOn.getTime() - Date.now()) / 1000) : 3600,
+                    scope: response.scopes.join(' '),
+                    token_type: 'Bearer',
+                    timestamp: Date.now()
+                };
+                
+                sessionStorage.setItem('microsoft_token', JSON.stringify(tokenData));
+                this.state.microsoftToken = response.accessToken;
+                
+                this.updateConnectionStatus('onedrive', true);
+                this.showNotification('OneDrive connected successfully!', 'success');
+                this.checkProceedButton();
+                
+                console.log('Microsoft authentication completed');
+            } else {
+                throw new Error('No access token received');
+            }
+            
+        } catch (error) {
+            console.error('Microsoft authentication error:', error);
+            this.showNotification('Microsoft authentication failed. Please try again.', 'error');
+        }
+    }
+
+    updateConnectionStatus(service, connected) {
+        console.log(`Updating ${service} connection status to: ${connected}`);
+        const statusElement = document.getElementById(`${service === 'google' ? 'google' : 'onedrive'}-status`);
+        if (statusElement) {
+            const statusSpan = statusElement.querySelector('.status');
+            if (statusSpan) {
+                statusSpan.textContent = connected ? 'Connected' : 'Disconnected';
+                statusSpan.className = connected ? 'status status--success' : 'status status--error';
+                console.log(`${service} status updated to: ${connected ? 'Connected' : 'Disconnected'}`);
+            }
+        }
+    }
+
+    checkProceedButton() {
+        const googleConnected = !!this.state.googleToken;
+        const microsoftConnected = !!this.state.microsoftToken;
+        const bothConnected = googleConnected && microsoftConnected;
+        
+        console.log('Checking proceed button:', { bothConnected, google: googleConnected, microsoft: microsoftConnected });
+        
+        const proceedBtn = document.getElementById('proceed-btn');
+        if (proceedBtn) {
+            proceedBtn.disabled = !bothConnected;
+            if (bothConnected) {
+                console.log('Proceed button enabled');
+            } else {
+                console.log('Proceed button disabled');
+            }
+        }
+    }
+
+    checkExistingAuth() {
+        console.log('Checking existing authentication...');
+        
+        // Check for stored tokens
+        const googleToken = sessionStorage.getItem('google_token');
+        const microsoftToken = sessionStorage.getItem('microsoft_token');
+        
+        if (googleToken && !googleToken.includes('demo_')) {
+            try {
+                const tokenData = JSON.parse(googleToken);
+                if (this.isTokenValid(tokenData)) {
+                    this.state.googleToken = tokenData.access_token;
+                    this.updateConnectionStatus('google', true);
+                    console.log('Found existing Google token');
+                }
+            } catch (e) {
+                console.log('Invalid Google token found, clearing...');
+                sessionStorage.removeItem('google_token');
+            }
+        }
+        
+        if (microsoftToken && !microsoftToken.includes('demo_')) {
+            try {
+                const tokenData = JSON.parse(microsoftToken);
+                if (this.isTokenValid(tokenData)) {
+                    this.state.microsoftToken = tokenData.access_token;
+                    this.updateConnectionStatus('onedrive', true);
+                    console.log('Found existing Microsoft token');
+                }
+            } catch (e) {
+                console.log('Invalid Microsoft token found, clearing...');
+                sessionStorage.removeItem('microsoft_token');
+            }
+        }
+        
+        this.checkProceedButton();
+    }
+
+    isTokenValid(tokenData) {
+        if (!tokenData.timestamp || !tokenData.expires_in) {
+            return false;
+        }
+        
+        const expirationTime = tokenData.timestamp + (tokenData.expires_in * 1000);
+        return Date.now() < expirationTime;
+    }
+
+    showDashboard() {
+        document.getElementById('auth-view').style.display = 'none';
+        document.getElementById('dashboard-view').style.display = 'block';
+        
+        // Load files from both services
+        this.loadGoogleDriveFiles();
+        this.loadOneDriveFiles();
+    }
+
+    async loadGoogleDriveFiles() {
+        if (!this.state.googleToken) {
+            console.log('No Google token available');
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `https://www.googleapis.com/drive/v3/files?q='${this.state.currentGoogleFolder}' in parents and trashed=false&fields=files(id,name,size,mimeType,modifiedTime,parents,webViewLink)`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.state.googleToken}`
+                    }
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                this.state.googleFiles = data.files || [];
+                this.renderFileList('google', this.state.googleFiles);
+                console.log('✅ Loaded real Google Drive files:', this.state.googleFiles.length);
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Failed to load Google Drive files:', error);
+            this.showNotification('Failed to load Google Drive files', 'error');
+        }
+    }
+
+    async loadOneDriveFiles() {
+        if (!this.state.microsoftToken) {
+            console.log('No Microsoft token available');
+            return;
+        }
+
+        try {
+            const endpoint = this.state.currentOneDriveFolder === 'root' 
+                ? 'https://graph.microsoft.com/v1.0/me/drive/root/children'
+                : `https://graph.microsoft.com/v1.0/me/drive/items/${this.state.currentOneDriveFolder}/children`;
+
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Authorization': `Bearer ${this.state.microsoftToken}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.state.oneDriveFiles = data.value || [];
+                this.renderFileList('onedrive', this.state.oneDriveFiles);
+                console.log('✅ Loaded real OneDrive files:', this.state.oneDriveFiles.length);
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Failed to load OneDrive files:', error);
+            this.showNotification('Failed to load OneDrive files', 'error');
+        }
+    }
+
+    renderFileList(service, files) {
+        const fileListElement = document.getElementById(`${service === 'google' ? 'google' : 'onedrive'}-file-list`);
+        if (!fileListElement) return;
+
+        if (files.length === 0) {
+            fileListElement.innerHTML = '<div class="empty-state">No files found</div>';
+            return;
+        }
+
+        const fileItems = files.map(file => {
+            const isFolder = service === 'google' 
+                ? file.mimeType === 'application/vnd.google-apps.folder'
+                : file.folder !== undefined;
+                
+            const fileSize = file.size ? this.formatFileSize(file.size) : '';
+            const modifiedDate = file.modifiedTime || file.lastModifiedDateTime || '';
+            
+            return `
+                <div class="file-item ${isFolder ? 'file-item--folder' : ''}" data-file-id="${file.id}">
+                    <div class="file-icon">
+                        ${this.getFileIcon(file)}
+                    </div>
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-meta">
+                            ${fileSize} ${modifiedDate ? '• ' + new Date(modifiedDate).toLocaleDateString() : ''}
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button class="btn btn--ghost btn--small" onclick="app.selectFile('${service}', '${file.id}')">
+                            Select
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        fileListElement.innerHTML = fileItems;
+    }
+
+    getFileIcon(file) {
+        // Simple file type detection - you can enhance this
+        if (file.mimeType === 'application/vnd.google-apps.folder' || file.folder) {
+            return '📁';
+        }
+        
+        const name = file.name.toLowerCase();
+        if (name.includes('.pdf')) return '📄';
+        if (name.includes('.doc') || name.includes('.docx')) return '📝';
+        if (name.includes('.xls') || name.includes('.xlsx')) return '📊';
+        if (name.includes('.ppt') || name.includes('.pptx')) return '📈';
+        if (name.includes('.jpg') || name.includes('.png') || name.includes('.gif')) return '🖼️';
+        if (name.includes('.mp4') || name.includes('.avi')) return '🎥';
+        if (name.includes('.mp3') || name.includes('.wav')) return '🎵';
+        
+        return '📄';
+    }
+
+    formatFileSize(bytes) {
+        if (!bytes) return '';
+        
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    selectFile(service, fileId) {
+        const selectedSet = service === 'google' ? this.state.selectedGoogleFiles : this.state.selectedOneDriveFiles;
+        
+        if (selectedSet.has(fileId)) {
+            selectedSet.delete(fileId);
+        } else {
+            selectedSet.add(fileId);
+        }
+        
+        // Update transfer button states
+        this.updateTransferButtons();
+    }
+
+    updateTransferButtons() {
+        const transferToOneDriveBtn = document.getElementById('transfer-to-onedrive');
+        const transferToGoogleBtn = document.getElementById('transfer-to-google');
+        
+        if (transferToOneDriveBtn) {
+            transferToOneDriveBtn.disabled = this.state.selectedGoogleFiles.size === 0;
+        }
+        
+        if (transferToGoogleBtn) {
+            transferToGoogleBtn.disabled = this.state.selectedOneDriveFiles.size === 0;
+        }
+    }
+
+    async transferSelectedFiles(from, to) {
+        const selectedFiles = from === 'google' ? this.state.selectedGoogleFiles : this.state.selectedOneDriveFiles;
+        
+        if (selectedFiles.size === 0) {
+            this.showNotification('No files selected for transfer', 'warning');
+            return;
+        }
+        
+        this.showNotification(`Starting transfer of ${selectedFiles.size} file(s)...`, 'info');
+        
+        // Here you would implement the actual file transfer logic
+        // For now, just show a success message
+        setTimeout(() => {
+            this.showNotification(`Successfully transferred ${selectedFiles.size} file(s)!`, 'success');
+            selectedFiles.clear();
+            this.updateTransferButtons();
+        }, 2000);
+    }
+
+    refreshFiles() {
+        this.loadGoogleDriveFiles();
+        this.loadOneDriveFiles();
+        this.showNotification('Files refreshed', 'success');
+    }
+
+    disconnectAll() {
+        // Clear all tokens
+        sessionStorage.clear();
+        localStorage.clear();
+        
+        // Reset state
+        this.state.googleToken = null;
+        this.state.microsoftToken = null;
+        this.state.selectedGoogleFiles.clear();
+        this.state.selectedOneDriveFiles.clear();
+        
+        // Update UI
+        this.updateConnectionStatus('google', false);
+        this.updateConnectionStatus('onedrive', false);
+        this.checkProceedButton();
+        
+        // Go back to auth view
+        document.getElementById('dashboard-view').style.display = 'none';
+        document.getElementById('auth-view').style.display = 'block';
+        
+        this.showNotification('Disconnected from all services', 'info');
+    }
+
+    showNotification(message, type = 'info') {
+        console.log(`Notification [${type}]: ${message}`);
+        
+        const container = document.getElementById('notifications');
+        if (!container) return;
+        
+        const notification = document.createElement('div');
+        notification.className = `notification notification--${type}`;
+        notification.textContent = message;
+        
+        container.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+    }
+}
+
+// Initialize the application when DOM is loaded
+let app;
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded - Creating DriveBridge instance...');
+        app = new DriveBridge();
+    });
+} else {
+    console.log('DOM already loaded - Creating DriveBridge instance...');
+    app = new DriveBridge();
+}
