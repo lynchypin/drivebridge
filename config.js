@@ -54,7 +54,7 @@ class Config {
     
     static getAppSettings() {
         return {
-            maxFileSize: 100 * 1024 * 1024, // 100MB - adjust as needed
+            maxFileSize: 1024 * 1024 * 1024, // 1GB - adjust as needed
             batchSize: 5, // Files per batch - adjust based on rate limits
             retryAttempts: 3,
             retryDelay: 2000, // milliseconds
