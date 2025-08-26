@@ -1784,15 +1784,26 @@ class DriveBridge {
     }
 
     toggleTransferLogs() {
-        const progressPanel = document.getElementById('transfer-progress');
-        const toggleBtn = document.getElementById('toggle-logs-btn');
+    const progressPanel = document.getElementById('transfer-progress');
+    const toggleBtn = document.getElementById('toggle-logs-btn');
+    const logContainer = document.getElementById('transfer-list');
+    
+    if (progressPanel && toggleBtn && logContainer) {
+        const isVisible = logContainer.style.display !== 'none';
         
-        if (progressPanel && toggleBtn) {
-            const isVisible = progressPanel.style.display !== 'none';
-            progressPanel.style.display = isVisible ? 'none' : 'block';
-            toggleBtn.textContent = isVisible ? '👁️ Show' : '👁️ Hide';
+        // Only hide the log content, not the entire panel
+        if (isVisible) {
+            logContainer.style.display = 'none';
+            toggleBtn.textContent = '👁️ Show Logs';
+            progressPanel.style.height = 'auto';
+        } else {
+            logContainer.style.display = 'block';
+            toggleBtn.textContent = '👁️ Hide Logs';
+            progressPanel.style.height = '';
         }
     }
+}
+
 
     refreshFiles() {
         this.loadGoogleDriveFiles();
