@@ -797,9 +797,9 @@ class DriveBridge {
         if (transferToOneDriveBtn) {
             const count = this.state.selectedGoogleFiles.size;
             transferToOneDriveBtn.disabled = count === 0;
-            transferToOneDriveBtn.textContent = count > 0 
-                ? `Transfer ${count} Selected to OneDrive →`
-                : 'Transfer Selected to OneDrive →';
+            transferToOneDriveBtn.innerHTML = count > 0 
+                ? `Transfer ${count} Selected to OneDrive → <span class="chunked-badge">CHUNKED</span>`
+                : 'Transfer Selected to OneDrive → <span class="chunked-badge">CHUNKED</span>';
         }
         
         if (transferToGoogleBtn) {
@@ -849,8 +849,8 @@ class DriveBridge {
             
             try {
                 // Create progress bar for this file
-                this.uiManager.createProgressBar(fileInfo.id, fileInfo.name, 
-                    Math.ceil(fileInfo.size / Config.getChunkSettings().downloadChunkSize));
+                const expectedChunks = fileInfo.size ? Math.ceil(fileInfo.size / Config.getChunkSettings().downloadChunkSize) : 1;
+                this.uiManager.createProgressBar(fileInfo.id, fileInfo.name, expectedChunks);
                 
                 let success = false;
                 
@@ -859,13 +859,14 @@ class DriveBridge {
                     if (this.isGoogleWorkspaceFile(fileInfo)) {
                         success = await this.transferGoogleWorkspaceFile(fileInfo);
                     } else {
-                        success = await this.transferEngine.transferFileChunked(
+                        const result = await this.transferEngine.transferFileChunked(
                             fileInfo, 
                             this.state.googleToken, 
                             this.state.microsoftToken,
                             this.state.currentOneDriveFolder,
                             (progressData) => this.uiManager.updateProgressBar(fileInfo.id, progressData)
                         );
+                        success = result;
                     }
                 } else {
                     // For other directions, use simpler transfer (can be enhanced later)
@@ -1175,15 +1176,124 @@ class DriveBridge {
 
     showCreateFolderModal(service) {
         this.currentFolderService = service;
-        // Implementation would show modal - simplified for brevity
+        const modal = this.uiManager.createModal('create-folder-modal', 'Create New Folder');
+        const content = modal.querySelector('.modal-content');
+        
+        content.innerHTML = `
+            <input type="text" id="folder-name-input" placeholder="Folder name" class="input" maxlength="255" autocomplete="off">
+            <div class="modal-actions">
+                <button id="create-folder-confirm" class="btn btn--primary" onclick="app.confirmCreateFolder()">Create</button>
+                <button id="create-folder-cancel" class="btn btn--secondary" onclick="app.hideCreateFolderModal()">Cancel</button>
+            </div>
+        `;
+        
+        this.uiManager.showModal('create-folder-modal');
+        
+        const input = document.getElementById('folder-name-input');
+        if (input) {
+            input.focus();
+        }
     }
 
     hideCreateFolderModal() {
-        // Implementation would hide modal - simplified for brevity
+        this.uiManager.closeModal('create-folder-modal');
     }
 
     async confirmCreateFolder() {
-        // Implementation would create folder - simplified for brevity
+        const folderNameInput = document.getElementById('folder-name-input');
+        if (!folderNameInput) return;
+        
+        const folderName = this.sanitizeInput(folderNameInput.value);
+        if (!folderName) {
+            this.uiManager.showNotification('Please enter a valid folder name', 'warning');
+            return;
+        }
+
+        if (folderName.length > 255) {
+            this.uiManager.showNotification('Folder name too long (maximum 255 characters)', 'warning');
+            return;
+        }
+
+        try {
+            const folderId = await this.createFolder(folderName, this.currentFolderService);
+            if (folderId) {
+                this.logger.info(`Created folder: ${folderName} in ${this.currentFolderService}`);
+                this.uiManager.showNotification(`Folder "${folderName}" created successfully`, 'success');
+                this.hideCreateFolderModal();
+                
+                if (this.currentFolderService === 'google') {
+                    await this.loadGoogleDriveFiles();
+                } else {
+                    await this.loadOneDriveFiles();
+                }
+            } else {
+                throw new Error('Failed to create folder');
+            }
+        } catch (error) {
+            this.logger.error(`Failed to create folder: ${folderName}`, { error: error.message });
+            this.uiManager.showNotification(`Failed to create folder: ${error.message}`, 'error');
+        }
+    }
+
+    async createFolder(folderName, service) {
+        try {
+            const safeFolderName = this.sanitizeInput(folderName);
+            if (!safeFolderName) {
+                throw new Error('Invalid folder name');
+            }
+            
+            this.checkRateLimit(service);
+            
+            if (service === 'onedrive') {
+                const parentPath = this.state.currentOneDriveFolder === 'root' 
+                    ? `${this.config.endpoints.microsoft.graph}/me/drive/root/children`
+                    : `${this.config.endpoints.microsoft.graph}/me/drive/items/${this.state.currentOneDriveFolder}/children`;
+                    
+                const response = await fetch(parentPath, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.microsoftToken}`,
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        name: safeFolderName,
+                        folder: {}
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.id;
+                } else {
+                    throw new Error(`OneDrive folder creation failed: ${response.status}`);
+                }
+            } else {
+                const response = await fetch(`${this.config.endpoints.google.drive}/files`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.state.googleToken}`,
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        name: safeFolderName,
+                        mimeType: 'application/vnd.google-apps.folder',
+                        parents: [this.state.currentGoogleFolder]
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.id;
+                } else {
+                    throw new Error(`Google Drive folder creation failed: ${response.status}`);
+                }
+            }
+        } catch (error) {
+            this.logger.error('Create folder error', { error: error.message });
+            throw error;
+        }
     }
 
     refreshFiles() {
@@ -1230,15 +1340,28 @@ class DriveBridge {
     toggleTransferLogs() {
         const progressPanel = document.getElementById('transfer-progress');
         const toggleBtn = document.getElementById('toggle-logs-btn');
+        const logContainer = document.getElementById('transfer-list');
+        const header = progressPanel?.querySelector('.transfer-header');
         
-        if (progressPanel && toggleBtn) {
-            const isVisible = progressPanel.style.display !== 'none';
+        if (progressPanel && toggleBtn && logContainer && header) {
+            const isVisible = logContainer.style.display !== 'none';
+            
             if (isVisible) {
-                progressPanel.style.display = 'none';
+                // Hide logs but keep header visible
+                logContainer.style.display = 'none';
                 toggleBtn.textContent = '👁️ Show';
+                header.style.cursor = 'pointer';
+                header.title = 'Click to show logs';
+                
+                // Add click handler to header when collapsed
+                header.onclick = () => this.toggleTransferLogs();
             } else {
-                progressPanel.style.display = 'block';
+                // Show logs
+                logContainer.style.display = 'block';
                 toggleBtn.textContent = '👁️ Hide';
+                header.style.cursor = 'default';
+                header.title = '';
+                header.onclick = null;
             }
         }
     }
