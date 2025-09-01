@@ -242,7 +242,7 @@ class DriveBridge {
                     this.logger.info('Google Identity Services loaded');
                     resolve();
                 } else if (attempts >= maxAttempts) {
-                    reject new Error('Google API failed to load');
+                    reject(new Error('Google API failed to load'));
                 } else {
                     setTimeout(checkGoogle, 100);
                 }
