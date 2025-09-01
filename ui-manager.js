@@ -325,22 +325,22 @@ class UIManager {
         }
     }
     
-    // Generic modal management
+    // Generic modal management - UPDATED WITH FIXES
     createModal(modalId, title) {
         // Remove existing modal if present
         const existing = document.getElementById(modalId);
         if (existing) existing.remove();
-        
+
         const overlay = this.getOrCreateOverlay();
         
         const modal = document.createElement('div');
         modal.id = modalId;
-        modal.className = 'modal';
+        modal.className = 'modal hidden';
         modal.innerHTML = `
             <div class="modal-container">
                 <div class="modal-header">
                     <h3>${this.escapeHtml(title)}</h3>
-                    <button class="modal-close" onclick="uiManager.closeModal('${modalId}')">&times;</button>
+                    <button class="modal-close" onclick="uiManager.closeModal('${modalId}')" aria-label="Close modal">&times;</button>
                 </div>
                 <div class="modal-content"></div>
             </div>
@@ -357,10 +357,17 @@ class UIManager {
         const overlay = this.getOrCreateOverlay();
         
         if (modal && overlay) {
+            // Clear any existing modal states first
+            this.clearModalState();
+            
+            // Show the modal and overlay
             modal.classList.remove('hidden');
             overlay.classList.remove('hidden');
             modal.style.display = 'flex';
             overlay.style.display = 'block';
+            
+            // Add body class to prevent scrolling
+            document.body.classList.add('modal-open');
             
             this.logger.debug(`Modal shown: ${modalId}`, {}, 'UI');
         }
@@ -368,7 +375,6 @@ class UIManager {
     
     closeModal(modalId) {
         const modal = document.getElementById(modalId);
-        const overlay = document.getElementById('modal-overlay');
         
         if (modal) {
             modal.classList.add('hidden');
@@ -377,13 +383,46 @@ class UIManager {
         
         this.activeModals.delete(modalId);
         
-        // Hide overlay if no active modals
-        if (this.activeModals.size === 0 && overlay) {
-            overlay.classList.add('hidden');
-            overlay.style.display = 'none';
-        }
+        // Always clear overlay when closing any modal
+        this.clearOverlay();
         
         this.logger.debug(`Modal closed: ${modalId}`, {}, 'UI');
+    }
+    
+    clearOverlay() {
+        const overlay = document.getElementById('modal-overlay');
+        
+        if (overlay) {
+            overlay.classList.add('hidden');
+            overlay.style.display = 'none';
+            
+            // Remove backdrop filter
+            overlay.style.backdropFilter = '';
+            overlay.style.webkitBackdropFilter = '';
+        }
+        
+        // Remove body classes that might affect interaction
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        
+        // Clear any remaining modal states
+        this.clearModalState();
+    }
+    
+    clearModalState() {
+        // Remove any blur effects from body/html
+        document.body.style.filter = '';
+        document.documentElement.style.filter = '';
+        
+        // Ensure body can be interacted with
+        document.body.style.pointerEvents = '';
+        document.body.style.userSelect = '';
+        
+        // Clear any transform effects
+        document.body.style.transform = '';
+        
+        // Reset overflow
+        document.body.style.overflow = '';
     }
     
     getOrCreateOverlay() {
@@ -392,16 +431,48 @@ class UIManager {
             overlay = document.createElement('div');
             overlay.id = 'modal-overlay';
             overlay.className = 'modal-overlay hidden';
-            overlay.onclick = () => {
-                // Close topmost modal when clicking overlay
-                if (this.activeModals.size > 0) {
-                    const lastModal = Array.from(this.activeModals).pop();
-                    this.closeModal(lastModal);
+            overlay.setAttribute('role', 'presentation');
+            overlay.onclick = (e) => {
+                // Only close if clicking the overlay itself, not its children
+                if (e.target === overlay) {
+                    this.closeAllModals();
                 }
             };
             document.body.appendChild(overlay);
         }
         return overlay;
+    }
+    
+    // Close all active modals
+    closeAllModals() {
+        // Close all active modals
+        this.activeModals.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.display = 'none';
+            }
+        });
+        
+        // Clear the active modals set
+        this.activeModals.clear();
+        
+        // Always clear overlay
+        this.clearOverlay();
+        
+        this.logger.debug('All modals closed', {}, 'UI');
+    }
+    
+    // Export format modal with proper cleanup
+    hideExportFormatModal() {
+        this.closeModal('export-format-modal');
+        
+        // Clean up export state
+        if (window.app && window.app.currentExportFile && window.app.currentExportFile.reject) {
+            window.app.currentExportFile.reject(new Error('Export cancelled by user'));
+            window.app.currentExportFile = null;
+            window.app.selectedExportFormat = null;
+        }
     }
     
     // Show notification
