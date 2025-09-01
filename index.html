@@ -20,8 +20,7 @@
     <!-- External Scripts from trusted CDNs only -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.4/lib/msal-browser.min.js" 
-            integrity="sha384-..." crossorigin="anonymous" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.4/lib/msal-browser.min.js" crossorigin="anonymous" async defer></script>
 </head>
 <body>
     <!-- Authentication View -->
@@ -168,6 +167,21 @@
             </div>
         </div>
     </div>
+
+    <!-- Export Format Selection Modal -->
+    <div id="export-format-modal" class="modal hidden" role="dialog" aria-labelledby="export-format-title">
+        <div class="modal__content">
+            <h3 id="export-format-title">Choose Export Format</h3>
+            <p id="export-file-info">Select the format to export this Google Workspace file:</p>
+            <div id="export-format-options" class="export-format-grid">
+                <!-- Format options will be populated here -->
+            </div>
+            <div class="modal__actions">
+                <button id="export-confirm" class="btn btn--primary">Export & Transfer</button>
+                <button id="export-cancel" class="btn btn--secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
     
     <div id="error-modal" class="modal hidden" role="dialog" aria-labelledby="error-modal-title">
         <div class="modal__content">
@@ -187,7 +201,7 @@
     <script src="app.js"></script>
     
     <!-- Security: Prevent any inline script execution -->
-    <script nonce="secure-nonce">
+    <script>
         // Security check on page load
         if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
             console.warn('🔒 Security Warning: Please use HTTPS in production');
