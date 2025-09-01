@@ -104,19 +104,47 @@ class DriveBridge {
         }
     }
 
+    // UPDATED MODAL MANAGEMENT FUNCTIONS
     clearAllModals() {
+        // Hide all modal elements
         document.querySelectorAll('.modal, .popup, [id*="modal"], [id*="popup"]').forEach(el => {
             el.style.display = 'none';
             el.classList.add('hidden');
+            el.setAttribute('aria-hidden', 'true');
         });
         
+        // Hide all overlay elements
         document.querySelectorAll('.modal-backdrop, .overlay, .modal-overlay').forEach(el => {
             el.style.display = 'none';
             el.classList.add('hidden');
+            
+            // Clear backdrop filter effects
+            el.style.backdropFilter = '';
+            el.style.webkitBackdropFilter = '';
+            el.style.filter = '';
         });
         
-        document.body.style.overflow = 'auto';
+        // Reset body state completely
+        document.body.style.overflow = '';
+        document.body.style.filter = '';
+        document.body.style.backdropFilter = '';
+        document.body.style.webkitBackdropFilter = '';
+        document.body.style.pointerEvents = '';
+        document.body.style.userSelect = '';
+        document.body.style.transform = '';
         document.body.classList.remove('modal-open');
+        
+        // Reset html state
+        document.documentElement.style.filter = '';
+        document.documentElement.style.backdropFilter = '';
+        document.documentElement.style.webkitBackdropFilter = '';
+        
+        // Clear any modal tracking
+        if (this.uiManager) {
+            this.uiManager.activeModals.clear();
+        }
+        
+        this.logger?.debug('All modals and overlays cleared', {}, 'UI');
     }
 
     setupEventListeners() {
@@ -181,6 +209,7 @@ class DriveBridge {
         }
     }
 
+    // UPDATED KEYBOARD SHORTCUTS WITH EMERGENCY MODAL FIX
     handleKeyboardShortcuts(event) {
         if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
             return;
@@ -200,10 +229,63 @@ class DriveBridge {
         }
         
         if (event.key === 'Escape') {
-            this.uiManager.closeModal('export-format-modal');
-            this.uiManager.closeModal('create-folder-modal');
-            this.uiManager.closeModal('transfer-errors-modal');
+            // Force close all modals on Escape
+            this.forceCloseAllModals();
         }
+    }
+
+    // EMERGENCY MODAL CLEANUP FUNCTION
+    forceCloseAllModals() {
+        try {
+            // Close specific modals
+            this.uiManager?.closeModal('export-format-modal');
+            this.uiManager?.closeModal('create-folder-modal');
+            this.uiManager?.closeModal('transfer-errors-modal');
+            
+            // Force clear all modal states
+            this.clearAllModals();
+            
+            // Additional cleanup
+            setTimeout(() => {
+                this.clearAllModals();
+            }, 100);
+            
+            this.logger?.info('Force closed all modals', {}, 'UI');
+            
+        } catch (error) {
+            this.logger?.error('Error force closing modals', { error: error.message }, 'UI');
+            
+            // Ultimate fallback - emergency cleanup
+            this.emergencyModalCleanup();
+        }
+    }
+
+    // Emergency modal cleanup function
+    emergencyModalCleanup() {
+        console.log('🚨 Emergency modal cleanup triggered');
+        
+        // Nuclear option - clear everything
+        document.querySelectorAll('[id*="modal"], [class*="modal"], [class*="overlay"]').forEach(el => {
+            el.remove();
+        });
+        
+        // Reset all body/html styles
+        document.body.className = '';
+        document.body.style.cssText = '';
+        document.documentElement.style.cssText = '';
+        
+        // Recreate basic overlay for future use
+        const overlay = document.createElement('div');
+        overlay.id = 'modal-overlay';
+        overlay.className = 'modal-overlay hidden';
+        document.body.appendChild(overlay);
+        
+        // Reset UI manager state
+        if (this.uiManager) {
+            this.uiManager.activeModals = new Set();
+        }
+        
+        this.logger?.info('Emergency modal cleanup completed', {}, 'EMERGENCY');
     }
 
     secureCleanup() {
