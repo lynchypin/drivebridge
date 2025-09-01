@@ -1,5 +1,5 @@
 // DriveBridge - Universal File Sharing Application
-// Production Version with Smart Incremental Transfers and Duplicate Handling
+// Production Version with Smart Incremental Transfers, Duplicate Handling, and Google Workspace Export
 
 class DriveBridge {
     constructor() {
@@ -42,7 +42,9 @@ class DriveBridge {
             transferLogs: [],
             isInitialized: false,
             rateLimiter: new Map(), // Track API request rates
-            transferCache: new Map() // Cache for checking existing files
+            transferCache: new Map(), // Cache for checking existing files
+            currentExportFile: null, // For export format selection
+            selectedExportFormat: null
         };
 
         // Initialize when DOM is ready
@@ -161,13 +163,17 @@ class DriveBridge {
         
         // Transfer log controls
         this.addClickListener('clear-logs-btn', () => this.clearTransferLogs());
-        this.addClickListener('toggle-logs-btn', () => this.Logs());
+        this.addClickListener('toggle-logs-btn', () => this.toggleTransferLogs());
         
         // Folder creation
         this.addClickListener('google-new-folder', () => this.showCreateFolderModal('google'));
         this.addClickListener('onedrive-new-folder', () => this.showCreateFolderModal('onedrive'));
         this.addClickListener('create-folder-confirm', () => this.confirmCreateFolder());
         this.addClickListener('create-folder-cancel', () => this.hideCreateFolderModal());
+        
+        // Export format modal
+        this.addClickListener('export-confirm', () => this.confirmExportFormat());
+        this.addClickListener('export-cancel', () => this.hideExportFormatModal());
         
         // Error modal
         this.addClickListener('error-close', () => this.hideErrorModal());
@@ -215,6 +221,7 @@ class DriveBridge {
     hideAllModals() {
         this.hideCreateFolderModal();
         this.hideErrorModal();
+        this.hideExportFormatModal();
     }
 
     secureCleanup() {
@@ -470,7 +477,7 @@ class DriveBridge {
 
     initTransferLogSystem() {
         this.showTransferProgress();
-        this.addTransferLog('Transfer log system initialized - Smart incremental transfers enabled', 'info');
+        this.addTransferLog('Transfer log system initialized - Smart incremental transfers with Google Workspace export enabled', 'info');
     }
 
     showDashboard() {
@@ -666,8 +673,12 @@ class DriveBridge {
             const safeFileName = this.escapeHtml(file.name);
             const safeFileId = this.escapeHtml(file.id);
             
+            // Add Google Workspace indicator
+            const isGoogleWorkspace = service === 'google' && this.isGoogleWorkspaceFile(file);
+            const workspaceIndicator = isGoogleWorkspace ? '<span class="workspace-badge" title="Google Workspace file - will show export options">📄*</span>' : '';
+            
             return `
-                <div class="file-item ${isFolder ? 'file-item--folder' : ''} ${isSelected ? 'file-item--selected' : ''}" 
+                <div class="file-item ${isFolder ? 'file-item--folder' : ''} ${isSelected ? 'file-item--selected' : ''} ${isGoogleWorkspace ? 'file-item--workspace' : ''}" 
                      data-file-id="${safeFileId}" data-service="${service}">
                     <div class="file-checkbox">
                         <input type="checkbox" 
@@ -680,7 +691,7 @@ class DriveBridge {
                         ${this.getFileIcon(file)}
                     </div>
                     <div class="file-info" ${isFolder ? `onclick="app.openFolder('${service}', '${safeFileId}', '${safeFileName}')"` : ''}>
-                        <div class="file-name" title="${safeFileName}">${safeFileName}</div>
+                        <div class="file-name" title="${safeFileName}">${safeFileName} ${workspaceIndicator}</div>
                         <div class="file-meta">
                             ${fileSize} ${modifiedDate ? '• ' + new Date(modifiedDate).toLocaleDateString() : ''}
                         </div>
@@ -713,6 +724,306 @@ class DriveBridge {
             return file.mimeType === 'application/vnd.google-apps.folder';
         } else {
             return file.folder !== undefined;
+        }
+    }
+
+    // Google Workspace File Detection and Export Functionality
+    isGoogleWorkspaceFile(fileInfo) {
+        if (!fileInfo || !fileInfo.mimeType) return false;
+        
+        const workspaceMimeTypes = [
+            'application/vnd.google-apps.document',     // Google Docs
+            'application/vnd.google-apps.spreadsheet', // Google Sheets
+            'application/vnd.google-apps.presentation', // Google Slides
+            'application/vnd.google-apps.drawing',     // Google Drawings
+            'application/vnd.google-apps.form',        // Google Forms
+            'application/vnd.google-apps.script',      // Google Apps Script
+            'application/vnd.google-apps.site'         // Google Sites (limited support)
+        ];
+        
+        return workspaceMimeTypes.includes(fileInfo.mimeType);
+    }
+
+    getGoogleWorkspaceExportFormats(mimeType) {
+        const exportFormats = {
+            'application/vnd.google-apps.document': {
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { name: 'Microsoft Word (.docx)', extension: '.docx' },
+                'application/pdf': { name: 'PDF Document (.pdf)', extension: '.pdf' },
+                'text/html': { name: 'Web Page (.html)', extension: '.html' },
+                'application/rtf': { name: 'Rich Text (.rtf)', extension: '.rtf' },
+                'application/vnd.oasis.opendocument.text': { name: 'OpenDocument Text (.odt)', extension: '.odt' },
+                'text/plain': { name: 'Plain Text (.txt)', extension: '.txt' },
+                'application/epub+zip': { name: 'EPUB (.epub)', extension: '.epub' }
+            },
+            'application/vnd.google-apps.spreadsheet': {
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { name: 'Microsoft Excel (.xlsx)', extension: '.xlsx' },
+                'application/pdf': { name: 'PDF Document (.pdf)', extension: '.pdf' },
+                'text/csv': { name: 'Comma Separated Values (.csv)', extension: '.csv' },
+                'text/tab-separated-values': { name: 'Tab Separated Values (.tsv)', extension: '.tsv' },
+                'application/vnd.oasis.opendocument.spreadsheet': { name: 'OpenDocument Spreadsheet (.ods)', extension: '.ods' },
+                'application/zip': { name: 'Web Page (.zip)', extension: '.zip' }
+            },
+            'application/vnd.google-apps.presentation': {
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation': { name: 'Microsoft PowerPoint (.pptx)', extension: '.pptx' },
+                'application/pdf': { name: 'PDF Document (.pdf)', extension: '.pdf' },
+                'text/plain': { name: 'Plain Text (.txt)', extension: '.txt' },
+                'image/jpeg': { name: 'JPEG Image (.jpg)', extension: '.jpg' },
+                'image/png': { name: 'PNG Image (.png)', extension: '.png' },
+                'image/svg+xml': { name: 'SVG Vector (.svg)', extension: '.svg' },
+                'application/vnd.oasis.opendocument.presentation': { name: 'OpenDocument Presentation (.odp)', extension: '.odp' }
+            },
+            'application/vnd.google-apps.drawing': {
+                'image/svg+xml': { name: 'SVG Vector (.svg)', extension: '.svg' },
+                'image/png': { name: 'PNG Image (.png)', extension: '.png' },
+                'image/jpeg': { name: 'JPEG Image (.jpg)', extension: '.jpg' },
+                'application/pdf': { name: 'PDF Document (.pdf)', extension: '.pdf' }
+            },
+            'application/vnd.google-apps.script': {
+                'application/vnd.google-apps.script+json': { name: 'Apps Script JSON (.json)', extension: '.json' }
+            },
+            'application/vnd.google-apps.form': {
+                'application/zip': { name: 'Web Page (.zip)', extension: '.zip' }
+            }
+        };
+        
+        return exportFormats[mimeType] || {};
+    }
+
+    async handleGoogleWorkspaceExport(fileId, fileInfo) {
+        return new Promise((resolve, reject) => {
+            this.currentExportFile = { fileId, fileInfo, resolve, reject };
+            this.showExportFormatModal(fileInfo);
+        });
+    }
+
+    showExportFormatModal(fileInfo) {
+        const modal = document.getElementById('export-format-modal');
+        const overlay = document.getElementById('modal-overlay');
+        const fileInfoElement = document.getElementById('export-file-info');
+        const optionsContainer = document.getElementById('export-format-options');
+        
+        if (!modal || !overlay) return;
+        
+        // Update file info
+        fileInfoElement.textContent = `Select the format to export "${fileInfo.name}":`;
+        
+        // Get available formats
+        const formats = this.getGoogleWorkspaceExportFormats(fileInfo.mimeType);
+        
+        // Clear previous options
+        optionsContainer.innerHTML = '';
+        
+        // Create format options
+        Object.entries(formats).forEach(([mimeType, formatInfo]) => {
+            const option = document.createElement('div');
+            option.className = 'export-format-option';
+            option.dataset.mimeType = mimeType;
+            option.onclick = () => this.selectExportFormat(option, mimeType);
+            
+            const icon = this.getFormatIcon(mimeType);
+            
+            option.innerHTML = `
+                <div class="format-icon">${icon}</div>
+                <div class="format-name">${formatInfo.name}</div>
+                <div class="format-description">${this.getFormatDescription(mimeType, fileInfo.mimeType)}</div>
+            `;
+            
+            optionsContainer.appendChild(option);
+        });
+        
+        // Show modal
+        modal.classList.remove('hidden');
+        overlay.classList.remove('hidden');
+        
+        // Select first option by default
+        const firstOption = optionsContainer.querySelector('.export-format-option');
+        if (firstOption) {
+            this.selectExportFormat(firstOption, firstOption.dataset.mimeType);
+        }
+    }
+
+    selectExportFormat(optionElement, mimeType) {
+        // Clear previous selection
+        document.querySelectorAll('.export-format-option').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        // Select current option
+        optionElement.classList.add('selected');
+        this.selectedExportFormat = mimeType;
+    }
+
+    getFormatIcon(mimeType) {
+        const iconMap = {
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📄',
+            'application/pdf': '📕',
+            'text/html': '🌐',
+            'application/rtf': '📝',
+            'text/plain': '📃',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📊',
+            'text/csv': '📈',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': '📊',
+            'image/jpeg': '🖼️',
+            'image/png': '🖼️',
+            'image/svg+xml': '🎨',
+            'application/zip': '🗜️',
+            'application/epub+zip': '📚',
+            'application/vnd.google-apps.script+json': '⚙️'
+        };
+        
+        return iconMap[mimeType] || '📄';
+    }
+
+    getFormatDescription(exportMimeType, originalMimeType) {
+        const descriptions = {
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Best for editing in Microsoft Word',
+            'application/pdf': 'Best for sharing and printing',
+            'text/html': 'Best for web publishing',
+            'text/plain': 'Plain text without formatting',
+            'text/csv': 'Best for data analysis',
+            'image/jpeg': 'Compressed image format',
+            'image/png': 'High quality image format',
+            'application/zip': 'Complete web page with assets'
+        };
+        
+        return descriptions[exportMimeType] || 'Standard format';
+    }
+
+    async confirmExportFormat() {
+        if (!this.selectedExportFormat || !this.currentExportFile) {
+            this.showNotification('Please select an export format', 'warning');
+            return;
+        }
+        
+        const { fileId, fileInfo, resolve, reject } = this.currentExportFile;
+        
+        try {
+            this.hideExportFormatModal();
+            
+            this.addTransferLog(`📤 Exporting ${this.escapeHtml(fileInfo.name)} as ${this.getGoogleWorkspaceExportFormats(fileInfo.mimeType)[this.selectedExportFormat].name}`, 'info');
+            
+            // Export the file
+            const blob = await this.exportGoogleWorkspaceFile(fileId, fileInfo, this.selectedExportFormat);
+            
+            // Update filename with correct extension
+            const formatInfo = this.getGoogleWorkspaceExportFormats(fileInfo.mimeType)[this.selectedExportFormat];
+            if (formatInfo && formatInfo.extension) {
+                const baseName = fileInfo.name.replace(/\.[^/.]+$/, ""); // Remove existing extension if any
+                fileInfo.name = baseName + formatInfo.extension;
+            }
+            
+            resolve(blob);
+            
+        } catch (error) {
+            this.hideExportFormatModal();
+            reject(error);
+        } finally {
+            this.currentExportFile = null;
+            this.selectedExportFormat = null;
+        }
+    }
+
+    hideExportFormatModal() {
+        const modal = document.getElementById('export-format-modal');
+        const overlay = document.getElementById('modal-overlay');
+        
+        if (modal && overlay) {
+            modal.classList.add('hidden');
+            overlay.classList.add('hidden');
+        }
+        
+        // If user cancels, reject the promise
+        if (this.currentExportFile && this.currentExportFile.reject) {
+            this.currentExportFile.reject(new Error('Export cancelled by user'));
+            this.currentExportFile = null;
+            this.selectedExportFormat = null;
+        }
+    }
+
+    async exportGoogleWorkspaceFile(fileId, fileInfo, exportMimeType) {
+        try {
+            this.checkRateLimit('google');
+            
+            // Export the file
+            const response = await fetch(
+                `${this.config.endpoints.google.drive}/files/${fileId}/export?mimeType=${encodeURIComponent(exportMimeType)}`,
+                {
+                    headers: { 
+                        'Authorization': `Bearer ${this.state.googleToken}`,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }
+            );
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.handleTokenExpiry('google');
+                }
+                if (response.status === 403) {
+                    throw new Error(`Export not allowed. File may be too large or you don't have permission.`);
+                }
+                throw new Error(`Failed to export Google Workspace file: ${response.status} - ${response.statusText}`);
+            }
+            
+            const formatName = this.getGoogleWorkspaceExportFormats(fileInfo.mimeType)[exportMimeType]?.name || 'selected format';
+            this.addTransferLog(`✅ Successfully exported as ${formatName}`, 'success');
+            
+            return await response.blob();
+            
+        } catch (error) {
+            this.addTransferLog(`❌ Failed to export Google Workspace file: ${error.message}`, 'error');
+            throw error;
+        }
+    }
+
+    async downloadFileBlobById(fileId, service) {
+        this.checkRateLimit(service);
+        
+        if (service === 'google') {
+            // First, get file info to check if it's a Google Workspace file
+            const fileInfo = await this.fetchFileInfoById(fileId, service);
+            
+            if (this.isGoogleWorkspaceFile(fileInfo)) {
+                // Show format selection modal for Google Workspace files
+                return await this.handleGoogleWorkspaceExport(fileId, fileInfo);
+            } else {
+                // Handle regular files
+                const response = await fetch(`${this.config.endpoints.google.drive}/files/${fileId}?alt=media`, {
+                    headers: { 
+                        'Authorization': `Bearer ${this.state.googleToken}`,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        this.handleTokenExpiry('google');
+                    }
+                    if (response.status === 403) {
+                        throw new Error(`Access denied. File may be a Google Workspace document or you don't have permission.`);
+                    }
+                    throw new Error(`Failed to download from Google Drive: ${response.status} - ${response.statusText}`);
+                }
+                
+                return await response.blob();
+            }
+        } else {
+            // OneDrive logic remains the same
+            const response = await fetch(`${this.config.endpoints.microsoft.graph}/me/drive/items/${fileId}/content`, {
+                headers: { 
+                    'Authorization': `Bearer ${this.state.microsoftToken}`,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.handleTokenExpiry('onedrive');
+                }
+                throw new Error(`Failed to download from OneDrive: ${response.status} - ${response.statusText}`);
+            }
+            
+            return await response.blob();
         }
     }
 
@@ -1411,44 +1722,6 @@ class DriveBridge {
         }
     }
 
-    async downloadFileBlobById(fileId, service) {
-        this.checkRateLimit(service);
-        
-        if (service === 'google') {
-            const response = await fetch(`${this.config.endpoints.google.drive}/files/${fileId}?alt=media`, {
-                headers: { 
-                    'Authorization': `Bearer ${this.state.googleToken}`,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            
-            if (!response.ok) {
-                if (response.status === 401) {
-                    this.handleTokenExpiry('google');
-                }
-                throw new Error(`Failed to download from Google Drive: ${response.status} - ${response.statusText}`);
-            }
-            
-            return await response.blob();
-        } else {
-            const response = await fetch(`${this.config.endpoints.microsoft.graph}/me/drive/items/${fileId}/content`, {
-                headers: { 
-                    'Authorization': `Bearer ${this.state.microsoftToken}`,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            
-            if (!response.ok) {
-                if (response.status === 401) {
-                    this.handleTokenExpiry('onedrive');
-                }
-                throw new Error(`Failed to download from OneDrive: ${response.status} - ${response.statusText}`);
-            }
-            
-            return await response.blob();
-        }
-    }
-
     async uploadFileBlob(fileBlob, fileName, service) {
         try {
             const safeFileName = this.sanitizeInput(fileName);
@@ -1513,6 +1786,14 @@ class DriveBridge {
         if (file.mimeType === 'application/vnd.google-apps.folder' || file.folder) {
             return '📁';
         }
+        
+        // Google Workspace files
+        if (file.mimeType === 'application/vnd.google-apps.document') return '📄';
+        if (file.mimeType === 'application/vnd.google-apps.spreadsheet') return '📊';
+        if (file.mimeType === 'application/vnd.google-apps.presentation') return '📈';
+        if (file.mimeType === 'application/vnd.google-apps.drawing') return '🎨';
+        if (file.mimeType === 'application/vnd.google-apps.script') return '⚙️';
+        if (file.mimeType === 'application/vnd.google-apps.form') return '📝';
         
         const name = file.name ? file.name.toLowerCase() : '';
         const mimeType = file.mimeType || '';
@@ -1746,165 +2027,4 @@ class DriveBridge {
             timestamp,
             message: this.sanitizeInput(message),
             type,
-            id: Date.now() + Math.random()
-        };
-        
-        this.state.transferLogs.push(logEntry);
-        
-        if (this.state.transferLogs.length > this.config.settings.logRetentionCount) {
-            this.state.transferLogs = this.state.transferLogs.slice(-50);
-        }
-        
-        this.renderTransferLogs();
-    }
-
-    renderTransferLogs() {
-        const logContainer = document.getElementById('transfer-list');
-        if (!logContainer) return;
-        
-        const logsHTML = this.state.transferLogs.slice(-20).map(log => `
-            <div class="log-entry log-entry--${log.type}">
-                <span class="log-timestamp">${this.escapeHtml(log.timestamp)}</span>
-                <span class="log-message">${this.escapeHtml(log.message)}</span>
-            </div>
-        `).join('');
-        
-        logContainer.innerHTML = logsHTML;
-        
-        logContainer.scrollTop = logContainer.scrollHeight;
-    }
-
-    clearTransferLogs() {
-        this.state.transferLogs = [];
-        const logContainer = document.getElementById('transfer-list');
-        if (logContainer) {
-            logContainer.innerHTML = '<div class="log-entry log-entry--info"><span class="log-message">Logs cleared</span></div>';
-        }
-        this.addTransferLog('Transfer logs cleared', 'info');
-    }
-
-    toggleTransferLogs() {
-    const progressPanel = document.getElementById('transfer-progress');
-    const toggleBtn = document.getElementById('toggle-logs-btn');
-    const logContainer = document.getElementById('transfer-list');
-    const header = progressPanel?.querySelector('.transfer-header');
-    
-    if (progressPanel && toggleBtn && logContainer && header) {
-        const isVisible = logContainer.style.display !== 'none';
-        
-        if (isVisible) {
-            // Hide logs but keep header visible
-            logContainer.style.display = 'none';
-            toggleBtn.textContent = '👁️ Show';
-            header.classList.add('collapsed');
-            header.style.cursor = 'pointer';
-            
-            // Add click handler to header when collapsed
-            header.onclick = () => this.toggleTransferLogs();
-            
-            // Add indicator
-            if (!header.querySelector('.toggle-indicator')) {
-                const indicator = document.createElement('span');
-                indicator.className = 'toggle-indicator';
-                indicator.textContent = '(click to expand)';
-                header.querySelector('h3').appendChild(indicator);
-            }
-        } else {
-            // Show logs
-            logContainer.style.display = 'block';
-            toggleBtn.textContent = '👁️ Hide';
-            header.classList.remove('collapsed');
-            header.style.cursor = 'default';
-            header.onclick = null;
-            
-            // Remove indicator
-            const indicator = header.querySelector('.toggle-indicator');
-            if (indicator) {
-                indicator.remove();
-            }
-        }
-    }
-}
-
-
-
-    refreshFiles() {
-        this.loadGoogleDriveFiles();
-        this.loadOneDriveFiles();
-        this.addTransferLog('File lists refreshed', 'info');
-        this.showNotification('Files refreshed', 'success');
-    }
-
-    disconnectAll() {
-        this.secureCleanup();
-        
-        this.state.selectedGoogleFiles.clear();
-        this.state.selectedOneDriveFiles.clear();
-        this.state.currentGoogleFolder = 'root';
-        this.state.currentOneDriveFolder = 'root';
-        this.state.googleFolderPath = [{ id: 'root', name: 'Root' }];
-        this.state.onedriveFolderPath = [{ id: 'root', name: 'Root' }];
-        this.state.rateLimiter.clear();
-        this.state.transferCache.clear();
-        
-        this.updateConnectionStatus('google', false);
-        this.updateConnectionStatus('onedrive', false);
-        this.checkProceedButton();
-        
-        document.getElementById('dashboard-view').style.display = 'none';
-        document.getElementById('auth-view').style.display = 'block';
-        
-        const progressPanel = document.getElementById('transfer-progress');
-        if (progressPanel) {
-            progressPanel.style.display = 'none';
-        }
-        
-        this.addTransferLog('Disconnected from all services - session data cleared', 'info');
-        this.showNotification('Disconnected from all services', 'info');
-    }
-
-    showNotification(message, type = 'info') {
-        const container = document.getElementById('notifications');
-        if (!container) return;
-        
-        const notification = document.createElement('div');
-        notification.className = `notification notification--${type}`;
-        notification.textContent = this.sanitizeInput(message);
-        notification.setAttribute('role', 'alert');
-        
-        container.appendChild(notification);
-        
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 5000);
-    }
-}
-
-// Security: Initialize only when DOM is ready and environment is secure
-let app;
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('🚀 DOM loaded - Creating DriveBridge instance...');
-        try {
-            app = new DriveBridge();
-        } catch (error) {
-            console.error('❌ Failed to initialize DriveBridge:', error);
-            document.body.innerHTML = `
-                <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
-                    <h1>🔒 Security Error</h1>
-                    <p>${error.message}</p>
-                    <p>Please ensure you're accessing this application over HTTPS and have configured your OAuth credentials properly.</p>
-                </div>
-            `;
-        }
-    });
-} else {
-    console.log('🚀 DOM already loaded - Creating DriveBridge instance...');
-    try {
-        app = new DriveBridge();
-    } catch (error) {
-        console.error('❌ Failed to initialize DriveBridge:', error);
-    }
-}
+            id: Date.now()
