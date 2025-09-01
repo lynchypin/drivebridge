@@ -687,6 +687,52 @@ body {
   word-break: break-word;
 }
 
+/* Export Format Selection */
+.export-format-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-sm);
+  margin: var(--spacing-lg) 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.export-format-option {
+  padding: var(--spacing-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+  background: var(--color-surface);
+}
+
+.export-format-option:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-50);
+}
+
+.export-format-option.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.export-format-option .format-name {
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-xs);
+}
+
+.export-format-option .format-description {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.export-format-option .format-icon {
+  font-size: 24px;
+  margin-bottom: var(--spacing-sm);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -931,23 +977,27 @@ body {
 
 /* Scrollbar Styling */
 .transfer-logs::-webkit-scrollbar,
-.file-list::-webkit-scrollbar {
+.file-list::-webkit-scrollbar,
+.export-format-grid::-webkit-scrollbar {
   width: 8px;
 }
 
 .transfer-logs::-webkit-scrollbar-track,
-.file-list::-webkit-scrollbar-track {
+.file-list::-webkit-scrollbar-track,
+.export-format-grid::-webkit-scrollbar-track {
   background: var(--color-gray-100);
 }
 
 .transfer-logs::-webkit-scrollbar-thumb,
-.file-list::-webkit-scrollbar-thumb {
+.file-list::-webkit-scrollbar-thumb,
+.export-format-grid::-webkit-scrollbar-thumb {
   background: var(--color-gray-400);
   border-radius: var(--radius-sm);
 }
 
 .transfer-logs::-webkit-scrollbar-thumb:hover,
-.file-list::-webkit-scrollbar-thumb:hover {
+.file-list::-webkit-scrollbar-thumb:hover,
+.export-format-grid::-webkit-scrollbar-thumb:hover {
   background: var(--color-gray-500);
 }
 
@@ -1020,6 +1070,15 @@ body {
     width: 100%;
     border-radius: 0;
     max-height: 50vh;
+  }
+  
+  .export-format-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal {
+    min-width: auto;
+    width: calc(100% - 2 * var(--spacing-lg));
   }
 }
 
@@ -1215,19 +1274,3 @@ body {
   color: var(--color-error-700);
   margin-bottom: var(--spacing-lg);
 }
-
-.transfer-header.collapsed {
-    cursor: pointer;
-    border-bottom: none;
-}
-
-.transfer-header.collapsed:hover {
-    background: var(--color-gray-100);
-}
-
-.toggle-indicator {
-    font-size: 12px;
-    margin-left: 8px;
-    opacity: 0.7;
-}
-
