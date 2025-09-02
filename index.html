@@ -3,228 +3,340 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DriveBridge - Universal File Sharing with Chunked Transfers</title>
+    <title>DriveBridge - Secure Cloud File Transfer</title>
+    <meta name="description" content="Secure, chunked file transfer between Google Drive and OneDrive with verbose logging">
+    <meta name="keywords" content="cloud transfer, google drive, onedrive, file sync, secure transfer">
+    <meta name="author" content="DriveBridge">
+    <meta name="robots" content="noindex, nofollow">
     
     <!-- Security Headers -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com https://alcdn.msauth.net; connect-src 'self' https://www.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com; style-src 'self' 'unsafe-inline'; img-src 'self'  https:; frame-src https://accounts.google.com https://login.microsoftonline.com;">
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
     
-    <!-- Styles -->
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌉%3C/text%3E%3C/svg%3E">
     
-    <!-- External Scripts -->
+    <!-- Preconnect to external domains for performance -->
+    <link rel="preconnect" href="https://apis.google.com">
+    <link rel="preconnect" href="https://accounts.google.com">
+    <link rel="preconnect" href="https://graph.microsoft.com">
+    <link rel="preconnect" href="https://login.microsoftonline.com">
+    
+    <!-- Load external scripts -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.4/lib/msal-browser.min.js" crossorigin="anonymous" async defer></script>
+    <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" 
+            integrity="sha384-1UKE6yO8RN6YA1Kb5n+8PpOABNVJqhJdEIxDhFc2GPd5f4Mwpr3mXqNbCpBzVF3E" 
+            crossorigin="anonymous"></script>
+    
+    <!-- Load application styles -->
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-    <!-- Authentication View -->
-    <div id="auth-view" class="auth-container">
-        <div class="auth-card card">
-            <div class="card__body">
-                <div class="logo-section">
-                    <h1>DriveBridge</h1>
-                    <p class="subtitle">Universal File Sharing</p>
-                    <div class="version-info">v2.0 - Chunked Transfers</div>
-                </div>
-                
-                <div class="description">
-                    <p>Securely transfer files between Google Drive and OneDrive with chunked transfers for large files. Your data remains private - authentication happens directly with Google and Microsoft.</p>
-                </div>
-
-                <div class="security-notice">
-                    <p class="security-text">🔒 Runs entirely in your browser • 🚀 Chunked transfers up to 50GB • 📝 Verbose logging</p>
-                </div>
-
-                <div class="auth-buttons">
-                    <div class="service-card">
-                        <div class="service-info">
-                            <h3>Google Drive</h3>
-                            <div class="connection-status" id="google-status">
-                                <span class="status status--error">Disconnected</span>
+    <!-- Main Application Container -->
+    <div id="app" class="app">
+        
+        <!-- Authentication View -->
+        <div id="auth-view" class="auth-container">
+            <div class="auth-card">
+                <div class="card__body">
+                    <!-- Logo and Title Section -->
+                    <div class="logo-section">
+                        <h1>🌉 DriveBridge</h1>
+                        <p class="subtitle">Secure Cloud File Transfer</p>
+                        <div class="version-info">v2.0 • Chunked Transfer Engine</div>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div class="description">
+                        <p>Transfer files seamlessly between Google Drive and OneDrive with advanced chunked transfers, comprehensive logging, and enterprise-grade security.</p>
+                    </div>
+                    
+                    <!-- Security Notice -->
+                    <div class="security-notice">
+                        <p class="security-text">
+                            🔒 Your data never touches our servers. All transfers happen directly between your browser and cloud services.
+                        </p>
+                    </div>
+                    
+                    <!-- Authentication Buttons -->
+                    <div class="auth-buttons">
+                        <!-- Google Drive Authentication -->
+                        <div class="service-card">
+                            <div class="service-info">
+                                <h3>📁 Google Drive</h3>
+                                <div class="connection-status" id="google-status">
+                                    <span class="status status--error">Disconnected</span>
+                                </div>
                             </div>
+                            <button id="google-auth-btn" class="btn btn--primary">
+                                Connect Google Drive
+                            </button>
                         </div>
-                        <button id="google-auth-btn" class="btn btn--primary">Connect Google Drive</button>
-                    </div>
-
-                    <div class="service-card">
-                        <div class="service-info">
-                            <h3>OneDrive</h3>
-                            <div class="connection-status" id="onedrive-status">
-                                <span class="status status--error">Disconnected</span>
+                        
+                        <!-- OneDrive Authentication -->
+                        <div class="service-card">
+                            <div class="service-info">
+                                <h3>☁️ OneDrive</h3>
+                                <div class="connection-status" id="onedrive-status">
+                                    <span class="status status--error">Disconnected</span>
+                                </div>
                             </div>
+                            <button id="onedrive-auth-btn" class="btn btn--primary">
+                                Connect OneDrive
+                            </button>
                         </div>
-                        <button id="onedrive-auth-btn" class="btn btn--primary">Connect OneDrive</button>
+                    </div>
+                    
+                    <!-- Proceed Section -->
+                    <div class="proceed-section">
+                        <button id="proceed-btn" class="btn btn--transfer" disabled>
+                            🚀 Launch DriveBridge Dashboard
+                        </button>
+                        <p style="margin-top: var(--spacing-sm); font-size: var(--font-size-sm); color: var(--color-text-secondary);">
+                            Connect both services to continue
+                        </p>
                     </div>
                 </div>
-
-                <div class="proceed-section">
-                    <button id="proceed-btn" class="btn btn--secondary" disabled>
-                        Continue to Dashboard
-                    </button>
-                </div>
             </div>
         </div>
-    </div>
-
-    <!-- Main Dashboard View -->
-    <div id="dashboard-view" class="dashboard" style="display: none;">
-        <!-- Header -->
-        <header class="header">
-            <div class="header__content">
-                <h1 class="header__title">DriveBridge Dashboard</h1>
-                <div class="header__actions">
-                    <button id="refresh-btn" class="btn btn--ghost" title="Refresh file lists">🔄 Refresh</button>
-                    <button id="download-logs-btn" class="btn btn--ghost" title="Download verbose logs">📝 Download Logs</button>
-                    <button id="disconnect-all-btn" class="btn btn--ghost" title="Disconnect all services">🔌 Disconnect All</button>
-                </div>
-            </div>
-        </header>
-
-        <!-- File Browser -->
-        <div class="file-browser">
-            <!-- Google Drive Panel -->
-            <div class="panel panel--google">
-                <div class="panel__header">
-                    <h2>Google Drive <span class="chunked-indicator">📥 Chunked Download</span></h2>
-                    <div class="panel__actions">
-                        <input type="text" id="google-search" placeholder="Search files..." class="search-input" autocomplete="off">
-                        <button id="google-new-folder" class="btn btn--primary btn--small" title="Create new folder">📁 New Folder</button>
-                        <button id="google-select-all" class="btn btn--ghost btn--small" title="Select all files">Select All</button>
-                        <button id="google-clear-all" class="btn btn--ghost btn--small" title="Clear selection">Clear</button>
+        
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="dashboard" style="display: none;">
+            
+            <!-- Header -->
+            <header class="header">
+                <div class="header__content">
+                    <h1 class="header__title">🌉 DriveBridge</h1>
+                    <div class="header__actions">
+                        <button id="refresh-btn" class="btn btn--secondary" title="Refresh file lists (Ctrl+R)">
+                            🔄 Refresh
+                        </button>
+                        <button id="download-logs-btn" class="btn btn--secondary" title="Download verbose logs (Ctrl+L)">
+                            📄 Export Logs
+                        </button>
+                        <button id="disconnect-all-btn" class="btn btn--ghost">
+                            🔌 Disconnect All
+                        </button>
                     </div>
                 </div>
+            </header>
+            
+            <!-- File Browser -->
+            <main class="file-browser">
                 
-                <div class="breadcrumb" id="google-breadcrumb">
-                    <span class="breadcrumb__item breadcrumb__item--active">Root</span>
-                </div>
-                
-                <div class="file-list" id="google-file-list">
-                    <div class="loading">Loading files...</div>
-                </div>
-                
-                <div class="transfer-actions">
-                    <button id="transfer-to-onedrive" class="btn btn--transfer" disabled title="Chunked transfer to OneDrive">
-                        Transfer Selected to OneDrive → <span class="chunked-badge">CHUNKED</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- OneDrive Panel -->
-            <div class="panel panel--onedrive">
-                <div class="panel__header">
-                    <h2>OneDrive <span class="chunked-indicator">📤 Chunked Upload</span></h2>
-                    <div class="panel__actions">
-                        <input type="text" id="onedrive-search" placeholder="Search files..." class="search-input" autocomplete="off">
-                        <button id="onedrive-new-folder" class="btn btn--primary btn--small" title="Create new folder">📁 New Folder</button>
-                        <button id="onedrive-select-all" class="btn btn--ghost btn--small" title="Select all files">Select All</button>
-                        <button id="onedrive-clear-all" class="btn btn--ghost btn--small" title="Clear selection">Clear</button>
+                <!-- Google Drive Panel -->
+                <section class="panel panel--google">
+                    <div class="panel__header">
+                        <h2>📁 Google Drive <span class="chunked-indicator">Chunked Download</span></h2>
+                        <div class="panel__actions">
+                            <input type="text" id="google-search" class="search-input" placeholder="Search files..." autocomplete="off">
+                            <button id="google-select-all" class="btn btn--ghost btn--small">Select All</button>
+                            <button id="google-clear-all" class="btn btn--ghost btn--small">Clear</button>
+                            <button id="google-new-folder" class="btn btn--secondary btn--small" title="Create new folder">📁+</button>
+                        </div>
                     </div>
-                </div>
+                    
+                    <!-- Breadcrumb Navigation -->
+                    <div id="google-breadcrumb" class="breadcrumb">
+                        <span class="breadcrumb__item breadcrumb__item--active">Root</span>
+                    </div>
+                    
+                    <!-- File List -->
+                    <div id="google-file-list" class="file-list">
+                        <div class="loading">Loading Google Drive files...</div>
+                    </div>
+                    
+                    <!-- Transfer Actions -->
+                    <div class="transfer-actions">
+                        <button id="transfer-to-onedrive" class="btn btn--transfer" disabled>
+                            Transfer Selected to OneDrive → <span class="chunked-badge">CHUNKED</span>
+                        </button>
+                    </div>
+                </section>
                 
-                <div class="breadcrumb" id="onedrive-breadcrumb">
-                    <span class="breadcrumb__item breadcrumb__item--active">Root</span>
-                </div>
+                <!-- OneDrive Panel -->
+                <section class="panel panel--onedrive">
+                    <div class="panel__header">
+                        <h2>☁️ OneDrive <span class="chunked-indicator">Chunked Upload</span></h2>
+                        <div class="panel__actions">
+                            <input type="text" id="onedrive-search" class="search-input" placeholder="Search files..." autocomplete="off">
+                            <button id="onedrive-select-all" class="btn btn--ghost btn--small">Select All</button>
+                            <button id="onedrive-clear-all" class="btn btn--ghost btn--small">Clear</button>
+                            <button id="onedrive-new-folder" class="btn btn--secondary btn--small" title="Create new folder">📁+</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Breadcrumb Navigation -->
+                    <div id="onedrive-breadcrumb" class="breadcrumb">
+                        <span class="breadcrumb__item breadcrumb__item--active">Root</span>
+                    </div>
+                    
+                    <!-- File List -->
+                    <div id="onedrive-file-list" class="file-list">
+                        <div class="loading">Loading OneDrive files...</div>
+                    </div>
+                    
+                    <!-- Transfer Actions -->
+                    <div class="transfer-actions">
+                        <button id="transfer-to-google" class="btn btn--transfer" disabled>
+                            ← Transfer Selected to Google Drive
+                        </button>
+                    </div>
+                </section>
                 
-                <div class="file-list" id="onedrive-file-list">
-                    <div class="loading">Loading files...</div>
-                </div>
-                
-                <div class="transfer-actions">
-                    <button id="transfer-to-google" class="btn btn--transfer" disabled title="Transfer to Google Drive">
-                        ← Transfer Selected to Google Drive
-                    </button>
-                </div>
-            </div>
+            </main>
+            
         </div>
-
-        <!-- Transfer Progress Panel -->
-        <div id="transfer-progress" class="transfer-progress">
-            <div class="transfer-header">
-                <h3>Transfer Progress & Logs</h3>
-                <div class="transfer-controls">
-                    <button id="clear-logs-btn" class="btn btn--ghost btn--small" title="Clear all logs">🗑️ Clear</button>
-                    <button id="toggle-logs-btn" class="btn btn--ghost btn--small" title="Hide/show logs">👁️ Hide</button>
-                </div>
-            </div>
-            <div id="transfer-list" class="transfer-logs" role="log" aria-live="polite"></div>
-        </div>
-    </div>
-
-    <!-- Modals -->
-    <div id="modal-overlay" class="modal-overlay hidden" role="presentation"></div>
-    
-    <!-- Create Folder Modal -->
-    <div id="create-folder-modal" class="modal hidden" role="dialog" aria-labelledby="folder-modal-title">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h3 id="folder-modal-title">Create New Folder</h3>
-                <button class="modal-close" onclick="uiManager.closeModal('create-folder-modal')">&times;</button>
-            </div>
-            <div class="modal-content">
-                <input type="text" id="folder-name-input" placeholder="Folder name" class="input" maxlength="255" autocomplete="off">
-                <div class="modal-actions">
-                    <button id="create-folder-confirm" class="btn btn--primary">Create</button>
-                    <button id="create-folder-cancel" class="btn btn--secondary">Cancel</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Export Format Selection Modal -->
-    <div id="export-format-modal" class="modal hidden" role="dialog" aria-labelledby="export-format-title">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h3 id="export-format-title">Choose Export Format</h3>
-                <button class="modal-close" onclick="uiManager.closeModal('export-format-modal')">&times;</button>
-            </div>
-            <div class="modal-content">
-                <p id="export-file-info" class="export-info">Select the format to export this Google Workspace file:</p>
-                <div id="export-format-options" class="export-format-grid">
-                    <!-- Format options populated by JavaScript -->
-                </div>
-                <div class="modal-actions">
-                    <button id="export-confirm" class="btn btn--primary">Export & Transfer</button>
-                    <button id="export-cancel" class="btn btn--secondary">Cancel</button>
-                </div>
-            </div>
-        </div>
+        
     </div>
     
-    <!-- Transfer Errors Modal -->
-    <div id="transfer-errors-modal" class="modal hidden" role="dialog" aria-labelledby="transfer-errors-title">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h3 id="transfer-errors-title">Transfer Errors</h3>
-                <button class="modal-close" onclick="uiManager.closeModal('transfer-errors-modal')">&times;</button>
-            </div>
-            <div class="modal-content">
-                <!-- Error content populated by JavaScript -->
+    <!-- Transfer Progress Panel -->
+    <div id="transfer-progress" class="transfer-progress" style="display: none;">
+        <div class="transfer-header">
+            <h3>📊 Transfer Progress</h3>
+            <div class="transfer-controls">
+                <button id="toggle-logs-btn" class="btn btn--ghost btn--small" title="Toggle logs visibility">👁️ Hide</button>
+                <button id="clear-logs-btn" class="btn btn--ghost btn--small" title="Clear transfer logs">🗑️ Clear</button>
+                <button id="download-logs-btn" class="btn btn--ghost btn--small" title="Download detailed logs">📄 Export</button>
             </div>
         </div>
+        <div id="transfer-list" class="transfer-logs">
+            <!-- Dynamic progress bars and logs will be inserted here -->
+        </div>
     </div>
-
+    
     <!-- Notification Container -->
-    <div id="notifications" class="notifications" role="region" aria-live="polite" aria-label="Notifications"></div>
-
-    <!-- Application Scripts - Load in specific order -->
+    <div id="notifications" class="notifications">
+        <!-- Dynamic notifications will be inserted here -->
+    </div>
+    
+    <!-- Modal Overlay (for dynamic modals) -->
+    <div id="modal-overlay" class="modal-overlay hidden" role="presentation">
+        <!-- Dynamic modals will be inserted here -->
+    </div>
+    
+    <!-- Loading Scripts -->
+    <script>
+        console.log('🚀 DriveBridge v2.0 - Production Ready');
+        console.log('📊 Chunked Transfer Engine: Enabled');
+        console.log('📝 Verbose Logging: Enabled');
+        console.log('🔒 Security Headers: Active');
+    </script>
+    
+    <!-- Load Application Scripts in Order -->
     <script src="config.js"></script>
     <script src="logger.js"></script>
     <script src="ui-manager.js"></script>
-    <script src="error-handler.js"></script>
     <script src="chunked-transfer.js"></script>
+    <script src="error-handler.js"></script>
     <script src="app.js"></script>
     
-    <!-- Security check -->
+    <!-- Performance and Analytics -->
     <script>
-        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-            console.warn('🔒 Security Warning: Please use HTTPS in production');
+        // Performance monitoring
+        window.addEventListener('load', function() {
+            if ('performance' in window) {
+                const loadTime = Math.round(performance.now());
+                console.log(`⚡ DriveBridge loaded in ${loadTime}ms`);
+                
+                // Log performance metrics
+                if (window.logger) {
+                    window.logger.info('Application loaded', {
+                        loadTime: loadTime,
+                        userAgent: navigator.userAgent.substring(0, 100),
+                        screenResolution: `${screen.width}x${screen.height}`,
+                        timestamp: Date.now()
+                    }, 'PERFORMANCE');
+                }
+            }
+        });
+        
+        // Error boundary for unhandled errors
+        window.addEventListener('error', function(e) {
+            console.error('🚨 Global Error:', e.error);
+        });
+        
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('🚨 Unhandled Promise Rejection:', e.reason);
+        });
+        
+        // Accessibility improvements
+        document.addEventListener('keydown', function(e) {
+            // Skip links for keyboard navigation
+            if (e.key === 'Tab' && e.shiftKey && e.target === document.body) {
+                const firstFocusable = document.querySelector('button, input, [tabindex]');
+                if (firstFocusable) {
+                    e.preventDefault();
+                    firstFocusable.focus();
+                }
+            }
+        });
+        
+        // Progressive Web App features
+        if ('serviceWorker' in navigator) {
+            // Disabled for now to avoid caching issues during development
+            // navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+        
+        // Wake lock support detection
+        if ('wakeLock' in navigator) {
+            console.log('✅ Wake Lock API supported - large transfers will prevent screen sleep');
+        } else {
+            console.log('⚠️ Wake Lock API not supported in this browser');
+        }
+        
+        // Clipboard API detection
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            console.log('✅ Clipboard API supported - share links will copy automatically');
+        } else {
+            console.log('⚠️ Clipboard API not supported - share links will be displayed');
+        }
+        
+        // Network information (experimental)
+        if ('connection' in navigator) {
+            const connection = navigator.connection;
+            console.log(`📡 Network: ${connection.effectiveType} (${connection.downlink} Mbps)`);
+        }
+        
+        // Touch device detection
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isTouchDevice) {
+            document.body.classList.add('touch-device');
+            console.log('📱 Touch device detected');
         }
     </script>
+    
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "DriveBridge",
+        "description": "Secure, chunked file transfer between Google Drive and OneDrive",
+        "url": "https://lynchypin.github.io/drivebridge/",
+        "applicationCategory": "ProductivityApplication",
+        "operatingSystem": "Web Browser",
+        "browserRequirements": "Modern browser with ES6+ support",
+        "author": {
+            "@type": "Organization",
+            "name": "DriveBridge"
+        },
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "featureList": [
+            "Chunked file transfers",
+            "Direct browser-to-cloud transfer",
+            "Google Drive integration",
+            "OneDrive integration",
+            "Verbose logging",
+            "Enterprise security"
+        ]
+    }
+    </script>
+
 </body>
 </html>
