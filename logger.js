@@ -45,10 +45,11 @@ class Logger {
             level: level.toUpperCase(),
             category,
             message,
-            JSON.parse(JSON.stringify(data)), // Deep clone to prevent mutations
+             JSON.parse(JSON.stringify(data)), // ← Added "" 
             sessionId: this.sessionId,
             id: Date.now() + Math.random()
         };
+
 
         this.logs.push(logEntry);
 
