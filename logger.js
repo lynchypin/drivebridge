@@ -4,11 +4,34 @@
 class Logger {
     constructor() {
         this.logs = [];
-        this.config = Config.getLoggingConfig();
+        this.config = this.getLoggingConfig();
         this.sessionId = this.generateSessionId();
         this.startTime = Date.now();
 
         this.info('Logger initialized', { sessionId: this.sessionId });
+    }
+
+    // Fixed: Added missing getLoggingConfig method
+    getLoggingConfig() {
+        if (typeof Config !== 'undefined' && Config.getLoggingConfig) {
+            return Config.getLoggingConfig();
+        }
+        
+        // Fallback config if Config class not available
+        return {
+            levels: {
+                ERROR: 0,
+                WARN: 1,
+                INFO: 2,
+                DEBUG: 3,
+                TRACE: 4
+            },
+            defaultLevel: 'INFO',
+            enableConsoleLog: true,
+            enableFileExport: true,
+            maxLogSize: 1000,
+            logRotationSize: 500
+        };
     }
 
     generateSessionId() {
@@ -42,7 +65,7 @@ class Logger {
         }
 
         // Trigger UI update
-        if (typeof window !== 'undefined' && window.uiManager) {
+        if (typeof window !== 'undefined' && window.uiManager && window.uiManager.updateTransferLogs) {
             window.uiManager.updateTransferLogs(this.getRecentLogs(20));
         }
     }
@@ -192,10 +215,10 @@ class Logger {
     // Get failed transfers for error modal
     getFailedTransfers() {
         return this.logs
-            .filter(log => log.category === 'FILE_TRANSFER' && log.data.success === false)
+            .filter(log => log.category === 'FILE_TRANSFER' && log.data && log.data.success === false)
             .map(log => ({
                 fileName: log.data.fileName,
-                error: log.data.error?.message || 'Unknown error',
+                error: log.data.error ? log.data.error.message : 'Unknown error',
                 timestamp: log.timestamp,
                 fileId: log.data.fileId
             }));
