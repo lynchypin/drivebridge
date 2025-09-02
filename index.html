@@ -24,10 +24,7 @@
     
     <!-- Load external scripts -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- FIXED -->
-    <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js" 
-        crossorigin="anonymous"></script>
-
+    <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js" crossorigin="anonymous"></script>
     
     <!-- Load application styles -->
     <link rel="stylesheet" href="style.css">
@@ -227,7 +224,143 @@
     
     <!-- Load Application Scripts in Order -->
     <script src="config.js"></script>
-    <script src="logger.js"></script>
+    
+    <!-- Emergency Inline Logger (bypasses broken logger.js) -->
+    <script>
+        console.log('🚨 Loading emergency Logger...');
+        
+        class Logger {
+            constructor() {
+                this.logs = [];
+                this.sessionId = 'session_' + Date.now();
+                this.startTime = Date.now();
+                console.log('✅ Emergency Logger initialized');
+            }
+
+            log(level, message, data, category) {
+                const entry = {
+                    timestamp: new Date().toISOString(),
+                    level: level || 'INFO',
+                    message: message || '',
+                     data || {},
+                    category: category || 'GENERAL',
+                    id: Date.now() + Math.random()
+                };
+                this.logs.push(entry);
+                console.log('[' + level + '] [' + category + '] ' + message, data);
+                if (this.logs.length > 1000) this.logs = this.logs.slice(-500);
+            }
+
+            error(message, data, category) { this.log('ERROR', message, data, category || 'ERROR'); }
+            warn(message, data, category) { this.log('WARN', message, data, category || 'WARNING'); }
+            info(message, data, category) { this.log('INFO', message, data, category || 'INFO'); }
+            debug(message, data, category) { this.log('DEBUG', message, data, category || 'DEBUG'); }
+            trace(message, data, category) { this.log('TRACE', message, data, category || 'TRACE'); }
+
+            transferStart(transferId, fileCount, source, destination) {
+                this.info('Transfer session started', { transferId: transferId, fileCount: fileCount, source: source, destination: destination }, 'TRANSFER');
+            }
+
+            transferComplete(transferId, results) {
+                this.info('Transfer session completed', { transferId: transferId, results: results }, 'TRANSFER');
+            }
+
+            fileTransferStart(fileId, fileName, fileSize, chunkCount) {
+                this.info('File transfer started: ' + fileName, { fileId: fileId, fileName: fileName, fileSize: fileSize, chunkCount: chunkCount }, 'FILE_TRANSFER');
+            }
+
+            fileTransferComplete(fileId, fileName, success, error) {
+                if (success) {
+                    this.info('File transfer completed: ' + fileName, { fileId: fileId, fileName: fileName, success: success }, 'FILE_TRANSFER');
+                } else {
+                    this.error('File transfer failed: ' + fileName, { fileId: fileId, fileName: fileName, success: success, error: error }, 'FILE_TRANSFER');
+                }
+            }
+
+            chunkTransfer(fileId, fileName, chunkIndex, totalChunks, success, error, retryCount) {
+                const message = 'Chunk ' + (chunkIndex + 1) + '/' + totalChunks + (success ? ' transferred: ' : ' failed: ') + fileName;
+                this.debug(message, { fileId: fileId, chunkIndex: chunkIndex, totalChunks: totalChunks, success: success, error: error, retryCount: retryCount }, 'CHUNK_TRANSFER');
+            }
+
+            apiCall(method, url, success, responseStatus, duration, error) {
+                const message = 'API ' + method + (success ? ' success: ' : ' failed: ') + url;
+                if (success) {
+                    this.debug(message, { method: method, responseStatus: responseStatus, duration: duration }, 'API_CALL');
+                } else {
+                    this.error(message, { method: method, responseStatus: responseStatus, duration: duration, error: error }, 'API_CALL');
+                }
+            }
+
+            getRecentLogs(count) {
+                return this.logs.slice(-(count || 50)).map(function(log) {
+                    return {
+                        timestamp: new Date(log.timestamp).toLocaleTimeString(),
+                        level: log.level,
+                        category: log.category,
+                        message: log.message,
+                        id: log.id
+                    };
+                });
+            }
+
+            getFailedTransfers() {
+                const failed = [];
+                for (let i = 0; i < this.logs.length; i++) {
+                    const log = this.logs[i];
+                    if (log.category === 'FILE_TRANSFER' && log.data && log.data.success === false) {
+                        failed.push({
+                            fileName: log.data.fileName || 'Unknown',
+                            error: (log.data.error && log.data.error.message) || 'Unknown error',
+                            timestamp: log.timestamp,
+                            fileId: log.data.fileId
+                        });
+                    }
+                }
+                return failed;
+            }
+
+            downloadLogFile() {
+                try {
+                    const header = '# DriveBridge Transfer Log\n# Session ID: ' + this.sessionId + '\n# Generated: ' + new Date().toISOString() + '\n# Total Entries: ' + this.logs.length + '\n\n';
+                    const logContent = this.logs.map(function(log) {
+                        return '[' + log.timestamp + '] [' + log.level + '] [' + log.category + '] ' + log.message;
+                    }).join('\n');
+                    
+                    const blob = new Blob([header + logContent], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = 'drivebridge-log-' + this.sessionId + '.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    setTimeout(function() {
+                        window.URL.revokeObjectURL(url);
+                        if (document.body.contains(a)) document.body.removeChild(a);
+                    }, 100);
+                    
+                    this.info('Log file downloaded');
+                    return true;
+                } catch (error) {
+                    console.error('Failed to download log file:', error);
+                    return false;
+                }
+            }
+
+            clearLogs() {
+                const oldCount = this.logs.length;
+                this.logs = [];
+                this.sessionId = 'session_' + Date.now();
+                this.info('Logs cleared. Previous count: ' + oldCount);
+            }
+        }
+
+        window.Logger = Logger;
+        console.log('✅ Emergency Logger ready');
+    </script>
+    
+    <!-- Continue with other scripts -->
     <script src="ui-manager.js"></script>
     <script src="chunked-transfer.js"></script>
     <script src="error-handler.js"></script>
