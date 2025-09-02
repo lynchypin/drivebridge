@@ -104,7 +104,7 @@ class DriveBridge {
         }
     }
 
-    // UPDATED MODAL MANAGEMENT FUNCTIONS
+    // FIXED Modal management functions
     clearAllModals() {
         // Hide all modal elements
         document.querySelectorAll('.modal, .popup, [id*="modal"], [id*="popup"]').forEach(el => {
@@ -209,7 +209,6 @@ class DriveBridge {
         }
     }
 
-    // UPDATED KEYBOARD SHORTCUTS WITH EMERGENCY MODAL FIX
     handleKeyboardShortcuts(event) {
         if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
             return;
@@ -234,7 +233,7 @@ class DriveBridge {
         }
     }
 
-    // EMERGENCY MODAL CLEANUP FUNCTION
+    // Force close all modals - emergency cleanup
     forceCloseAllModals() {
         try {
             // Close specific modals
@@ -255,8 +254,10 @@ class DriveBridge {
         } catch (error) {
             this.logger?.error('Error force closing modals', { error: error.message }, 'UI');
             
-            // Ultimate fallback - emergency cleanup
-            this.emergencyModalCleanup();
+            // Ultimate fallback - reload page if modals won't close
+            if (confirm('Modal system appears stuck. Reload the page?')) {
+                window.location.reload();
+            }
         }
     }
 
@@ -951,7 +952,7 @@ class DriveBridge {
                         success = result;
                     }
                 } else {
-                    // For other directions, use simpler transfer (can be enhanced later)
+                    // For other directions, use simpler transfer
                     success = await this.transferFileSimple(fileInfo, from, to);
                 }
                 
@@ -999,46 +1000,98 @@ class DriveBridge {
         return new Promise((resolve, reject) => {
             const formats = Config.getWorkspaceExportFormats()[fileInfo.mimeType] || {};
             
-            this.uiManager.showExportFormatModal(
-                fileInfo, 
-                formats,
-                async (selectedMimeType) => {
-                    try {
-                        // Export the file
-                        const exportedBlob = await this.transferEngine.exportGoogleWorkspaceFile(
-                            fileInfo.id, 
-                            this.state.googleToken, 
-                            selectedMimeType
-                        );
-                        
-                        // Update filename with correct extension
-                        const formatInfo = formats[selectedMimeType];
-                        if (formatInfo && formatInfo.extension) {
-                            const baseName = fileInfo.name.replace(/\.[^/.]+$/, "");
-                            fileInfo.name = baseName + formatInfo.extension;
-                        }
-                        
-                        // Upload using chunked engine
-                        const result = await this.transferEngine.uploadFileInChunks(
-                            exportedBlob,
-                            fileInfo.name,
-                            this.state.microsoftToken,
-                            this.state.currentOneDriveFolder,
-                            'workspace_' + Date.now(),
-                            (progressData) => this.uiManager.updateProgressBar(fileInfo.id, progressData)
-                        );
-                        
-                        resolve({ success: true, result });
-                        
-                    } catch (error) {
-                        reject(error);
-                    }
-                },
-                () => {
-                    reject(new Error('Export cancelled by user'));
-                }
-            );
+            // Create export format modal
+            const modal = this.uiManager.createModal('export-format-modal', 'Choose Export Format');
+            const content = modal.querySelector('.modal-content');
+            
+            content.innerHTML = `
+                <p class="export-info">Select format to export "${this.escapeHtml(fileInfo.name)}":</p>
+                <div class="export-format-grid">
+                    ${Object.entries(formats).map(([mimeType, formatInfo]) => `
+                        <div class="export-format-option" data-mime-type="${mimeType}" onclick="app.selectExportFormat(this, '${mimeType}')">
+                            <div class="format-icon">${this.getFileIcon({ mimeType })}</div>
+                            <div class="format-name">${this.escapeHtml(formatInfo.name)}</div>
+                            <div class="format-description">Standard format</div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn--primary" onclick="app.confirmExportFormat('${fileInfo.id}')">Export & Transfer</button>
+                    <button class="btn btn--secondary" onclick="app.cancelExportFormat()">Cancel</button>
+                </div>
+            `;
+            
+            // Store callbacks
+            this.state.currentExportFile = {
+                fileInfo,
+                resolve,
+                reject
+            };
+            this.state.selectedExportFormat = null;
+            
+            this.uiManager.showModal('export-format-modal');
+            
+            // Auto-select first format
+            const firstOption = content.querySelector('.export-format-option');
+            if (firstOption) {
+                this.selectExportFormat(firstOption, firstOption.dataset.mimeType);
+            }
         });
+    }
+
+    selectExportFormat(element, mimeType) {
+        // Clear previous selection
+        document.querySelectorAll('.export-format-option').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        // Select current
+        element.classList.add('selected');
+        this.state.selectedExportFormat = mimeType;
+    }
+
+    async confirmExportFormat(fileId) {
+        if (this.state.selectedExportFormat && this.state.currentExportFile) {
+            try {
+                // Export the file
+                const exportedBlob = await this.transferEngine.exportGoogleWorkspaceFile(
+                    this.state.currentExportFile.fileInfo.id, 
+                    this.state.googleToken, 
+                    this.state.selectedExportFormat
+                );
+                
+                // Update filename with correct extension
+                const formats = Config.getWorkspaceExportFormats()[this.state.currentExportFile.fileInfo.mimeType] || {};
+                const formatInfo = formats[this.state.selectedExportFormat];
+                if (formatInfo && formatInfo.extension) {
+                    const baseName = this.state.currentExportFile.fileInfo.name.replace(/\.[^/.]+$/, "");
+                    this.state.currentExportFile.fileInfo.name = baseName + formatInfo.extension;
+                }
+                
+                // Upload using chunked engine
+                const result = await this.transferEngine.uploadFileInChunks(
+                    exportedBlob,
+                    this.state.currentExportFile.fileInfo.name,
+                    this.state.microsoftToken,
+                    this.state.currentOneDriveFolder,
+                    'workspace_' + Date.now(),
+                    (progressData) => this.uiManager.updateProgressBar(this.state.currentExportFile.fileInfo.id, progressData)
+                );
+                
+                this.state.currentExportFile.resolve({ success: true, result });
+                this.uiManager.closeModal('export-format-modal');
+                
+            } catch (error) {
+                this.state.currentExportFile.reject(error);
+            }
+        }
+    }
+
+    cancelExportFormat() {
+        if (this.state.currentExportFile) {
+            this.state.currentExportFile.reject(new Error('Export cancelled by user'));
+            this.uiManager.closeModal('export-format-modal');
+        }
     }
 
     async transferFileSimple(fileInfo, from, to) {
