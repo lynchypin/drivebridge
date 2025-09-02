@@ -1,21 +1,15 @@
 // DriveBridge Configuration - Production Ready
-// All configuration constants and settings
 
 class Config {
-    // OAuth Configuration
     static getGoogleClientId() {
         return '572659500576-97729khduevuhv0bti7ce3cm6ep1t7gn.apps.googleusercontent.com';
     }
-    
     static getMicrosoftClientId() {
         return 'db78149b-9098-4898-b5b5-567fa03f75f0';
     }
-    
     static getRedirectUri() {
-        return 'https://lynchypin.github.io/drivebridge';
+        return 'https://lynchypin.github.io/drivebridge/';
     }
-    
-    // API Endpoints
     static getApiEndpoints() {
         return {
             google: {
@@ -27,42 +21,34 @@ class Config {
             }
         };
     }
-    
-    // Chunked Transfer Settings
     static getChunkSettings() {
         return {
-            downloadChunkSize: 32 * 1024 * 1024, // 32MB per download chunk
-            uploadChunkSize: 8 * 1024 * 1024,    // 8MB per upload chunk
-            maxRetryAttempts: 5,                  // 5 retries per chunk
-            requestTimeout: 120000,               // 120 seconds per chunk
-            maxConcurrentChunks: 3,               // 3 parallel chunks max
-            progressUpdateInterval: 500           // Update progress every 500ms
+            downloadChunkSize: 32 * 1024 * 1024,
+            uploadChunkSize: 8 * 1024 * 1024,
+            maxRetryAttempts: 5,
+            requestTimeout: 120000,
+            maxConcurrentChunks: 3,
+            progressUpdateInterval: 500
         };
     }
-    
-    // Application Settings
     static getAppSettings() {
         return {
-            maxFileSize: 50 * 1024 * 1024 * 1024, // 50GB max file size
-            batchSize: 3,                          // 3 files per batch (reduced for chunked)
-            retryAttempts: 3,                      // Overall transfer retries
-            retryDelay: 2000,                      // 2 second delay between retries
-            logRetentionCount: 1000,               // Keep 1000 log entries
-            enableVerboseLogging: true             // Detailed logging enabled
+            maxFileSize: 50 * 1024 * 1024 * 1024,
+            batchSize: 3,
+            retryAttempts: 3,
+            retryDelay: 2000,
+            logRetentionCount: 1000,
+            enableVerboseLogging: true
         };
     }
-    
-    // Security Settings
     static getSecuritySettings() {
         return {
             requireHttps: window.location.protocol === 'https:' || window.location.hostname === 'localhost',
             cspEnabled: true,
             maxRequestsPerMinute: 100,
-            tokenRefreshBuffer: 300000 // 5 minutes before expiry
+            tokenRefreshBuffer: 300000
         };
     }
-    
-    // Google Workspace Export Formats
     static getWorkspaceExportFormats() {
         return {
             'application/vnd.google-apps.document': {
@@ -105,8 +91,6 @@ class Config {
             }
         };
     }
-    
-    // File Type Icons
     static getFileTypeIcons() {
         return {
             'application/vnd.google-apps.folder': '📁',
@@ -125,8 +109,6 @@ class Config {
             'default': '📄'
         };
     }
-    
-    // Logging Configuration
     static getLoggingConfig() {
         return {
             levels: {
@@ -139,25 +121,20 @@ class Config {
             defaultLevel: 'INFO',
             enableConsoleLog: true,
             enableFileExport: true,
-            maxLogSize: 10 * 1024 * 1024, // 10MB max log file
-            logRotationSize: 1000          // Rotate after 1000 entries
+            maxLogSize: 10 * 1024 * 1024,
+            logRotationSize: 1000
         };
     }
 }
-
-// Validate configuration on load
 if (typeof window !== 'undefined') {
     const security = Config.getSecuritySettings();
     if (!security.requireHttps && window.location.hostname.includes('.github.io')) {
         console.warn('🔒 SECURITY WARNING: Application should run over HTTPS in production');
     }
-    
     console.log('✅ DriveBridge Configuration Loaded');
     console.log('📊 Chunked transfers enabled - Download: 32MB chunks, Upload: 8MB chunks');
     console.log('📝 Verbose logging enabled');
 }
-
-// Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Config;
 }
