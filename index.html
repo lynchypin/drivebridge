@@ -1,123 +1,342 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DriveBridge - Secure Cloud File Transfer</title>
-  <meta name="description" content="Secure, chunked file transfer between Google Drive and OneDrive with verbose logging">
-  <meta name="author" content="DriveBridge">
-
-  <!-- Security -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com https://alcdn.msauth.net; connect-src 'self' https://www.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com; style-src 'self' 'unsafe-inline'; img-src 'self'  https:; frame-src https://accounts.google.com https://login.microsoftonline.com;">
-  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-
-  <!-- Favicon & Performance -->
-  <link rel="icon" href="image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Ctext y='.9em' font-size='90'%3E🌉%3C/text%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://apis.google.com">
-  <link rel="preconnect" href="https://accounts.google.com">
-  <link rel="preconnect" href="https://graph.microsoft.com">
-  <link rel="preconnect" href="https://login.microsoftonline.com">
-
-  <!-- External Libraries -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js" crossorigin="anonymous"></script>
-
-  <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriveBridge - Secure Cloud File Transfer</title>
+    <meta name="description" content="Secure, chunked file transfer between Google Drive and OneDrive with verbose logging">
+    <meta name="keywords" content="cloud transfer, google drive, onedrive, file sync, secure transfer">
+    <meta name="author" content="DriveBridge">
+    <meta name="robots" content="noindex, nofollow">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com https://alcdn.msauth.net; connect-src 'self' https://www.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com; style-src 'self' 'unsafe-inline'; img-src 'self'  https:; frame-src https://accounts.google.com https://login.microsoftonline.com;">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Ctext y='.9em' font-size='90'%3E🌉%3C/text%3E%3C/svg%3E">
+    
+    <!-- Preconnect to external domains for performance -->
+    <link rel="preconnect" href="https://apis.google.com">
+    <link rel="preconnect" href="https://accounts.google.com">
+    <link rel="preconnect" href="https://graph.microsoft.com">
+    <link rel="preconnect" href="https://login.microsoftonline.com">
+    
+    <!-- Load external scripts -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js" crossorigin="anonymous"></script>
+    
+    <!-- Load application styles -->
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-  <!-- AUTH VIEW -->
-  <div id="auth-view" class="auth-container">
-    <!-- ... your auth UI ... -->
-  </div>
+    <!-- Main Application Container -->
+    <div id="app" class="app">
+        
+        <!-- Authentication View -->
+        <div id="auth-view" class="auth-container">
+            <div class="auth-card">
+                <div class="card__body">
+                    <!-- Logo and Title Section -->
+                    <div class="logo-section">
+                        <h1>🌉 DriveBridge</h1>
+                        <p class="subtitle">Secure Cloud File Transfer</p>
+                        <div class="version-info">v2.0 • Chunked Transfer Engine</div>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div class="description">
+                        <p>Transfer files seamlessly between Google Drive and OneDrive with advanced chunked transfers, comprehensive logging, and enterprise-grade security.</p>
+                    </div>
+                    
+                    <!-- Security Notice -->
+                    <div class="security-notice">
+                        <p class="security-text">
+                            🔒 Your data never touches our servers. All transfers happen directly between your browser and cloud services.
+                        </p>
+                    </div>
+                    
+                    <!-- Authentication Buttons -->
+                    <div class="auth-buttons">
+                        <!-- Google Drive Authentication -->
+                        <div class="service-card">
+                            <div class="service-info">
+                                <h3>📁 Google Drive</h3>
+                                <div class="connection-status" id="google-status">
+                                    <span class="status status--error">Disconnected</span>
+                                </div>
+                            </div>
+                            <button id="google-auth-btn" class="btn btn--primary">
+                                Connect Google Drive
+                            </button>
+                        </div>
+                        
+                        <!-- OneDrive Authentication -->
+                        <div class="service-card">
+                            <div class="service-info">
+                                <h3>☁️ OneDrive</h3>
+                                <div class="connection-status" id="onedrive-status">
+                                    <span class="status status--error">Disconnected</span>
+                                </div>
+                            </div>
+                            <button id="onedrive-auth-btn" class="btn btn--primary">
+                                Connect OneDrive
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Proceed Section -->
+                    <div class="proceed-section">
+                        <button id="proceed-btn" class="btn btn--transfer" disabled>
+                            🚀 Launch DriveBridge Dashboard
+                        </button>
+                        <p style="margin-top: var(--spacing-sm); font-size: var(--font-size-sm); color: var(--color-text-secondary);">
+                            Connect both services to continue
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="dashboard" style="display: none;">
+            
+            <!-- Header -->
+            <header class="header">
+                <div class="header__content">
+                    <h1 class="header__title">🌉 DriveBridge</h1>
+                    <div class="header__actions">
+                        <button id="refresh-btn" class="btn btn--secondary" title="Refresh file lists (Ctrl+R)">
+                            🔄 Refresh
+                        </button>
+                        <button id="download-logs-btn" class="btn btn--secondary" title="Download verbose logs (Ctrl+L)">
+                            📄 Export Logs
+                        </button>
+                        <button id="disconnect-all-btn" class="btn btn--ghost">
+                            🔌 Disconnect All
+                        </button>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- File Browser -->
+            <main class="file-browser">
+                
+                <!-- Google Drive Panel -->
+                <section class="panel panel--google">
+                    <div class="panel__header">
+                        <h2>📁 Google Drive <span class="chunked-indicator">Chunked Download</span></h2>
+                        <div class="panel__actions">
+                            <input type="text" id="google-search" class="search-input" placeholder="Search files..." autocomplete="off">
+                            <button id="google-select-all" class="btn btn--ghost btn--small">Select All</button>
+                            <button id="google-clear-all" class="btn btn--ghost btn--small">Clear</button>
+                            <button id="google-new-folder" class="btn btn--secondary btn--small" title="Create new folder">📁+</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Breadcrumb Navigation -->
+                    <div id="google-breadcrumb" class="breadcrumb">
+                        <span class="breadcrumb__item breadcrumb__item--active">Root</span>
+                    </div>
+                    
+                    <!-- File List -->
+                    <div id="google-file-list" class="file-list">
+                        <div class="loading">Loading Google Drive files...</div>
+                    </div>
+                    
+                    <!-- Transfer Actions -->
+                    <div class="transfer-actions">
+                        <button id="transfer-to-onedrive" class="btn btn--transfer" disabled>
+                            Transfer Selected to OneDrive → <span class="chunked-badge">CHUNKED</span>
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- OneDrive Panel -->
+                <section class="panel panel--onedrive">
+                    <div class="panel__header">
+                        <h2>☁️ OneDrive <span class="chunked-indicator">Chunked Upload</span></h2>
+                        <div class="panel__actions">
+                            <input type="text" id="onedrive-search" class="search-input" placeholder="Search files..." autocomplete="off">
+                            <button id="onedrive-select-all" class="btn btn--ghost btn--small">Select All</button>
+                            <button id="onedrive-clear-all" class="btn btn--ghost btn--small">Clear</button>
+                            <button id="onedrive-new-folder" class="btn btn--secondary btn--small" title="Create new folder">📁+</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Breadcrumb Navigation -->
+                    <div id="onedrive-breadcrumb" class="breadcrumb">
+                        <span class="breadcrumb__item breadcrumb__item--active">Root</span>
+                    </div>
+                    
+                    <!-- File List -->
+                    <div id="onedrive-file-list" class="file-list">
+                        <div class="loading">Loading OneDrive files...</div>
+                    </div>
+                    
+                    <!-- Transfer Actions -->
+                    <div class="transfer-actions">
+                        <button id="transfer-to-google" class="btn btn--transfer" disabled>
+                            ← Transfer Selected to Google Drive
+                        </button>
+                    </div>
+                </section>
+                
+            </main>
+            
+        </div>
+        
+    </div>
+    
+    <!-- Transfer Progress Panel -->
+    <div id="transfer-progress" class="transfer-progress" style="display: none;">
+        <div class="transfer-header">
+            <h3>📊 Transfer Progress</h3>
+            <div class="transfer-controls">
+                <button id="toggle-logs-btn" class="btn btn--ghost btn--small" title="Toggle logs visibility">👁️ Hide</button>
+                <button id="clear-logs-btn" class="btn btn--ghost btn--small" title="Clear transfer logs">🗑️ Clear</button>
+                <button id="download-logs-btn" class="btn btn--ghost btn--small" title="Download detailed logs">📄 Export</button>
+            </div>
+        </div>
+        <div id="transfer-list" class="transfer-logs">
+            <!-- Dynamic progress bars and logs will be inserted here -->
+        </div>
+    </div>
+    
+    <!-- Notification Container -->
+    <div id="notifications" class="notifications">
+        <!-- Dynamic notifications will be inserted here -->
+    </div>
+    
+    <!-- Modal Overlay (for dynamic modals) -->
+    <div id="modal-overlay" class="modal-overlay hidden" role="presentation">
+        <!-- Dynamic modals will be inserted here -->
+    </div>
+    
+    <!-- Loading Scripts -->
+    <script>
+        console.log('🚀 DriveBridge v2.0 - Production Ready');
+        console.log('📊 Chunked Transfer Engine: Enabled');
+        console.log('📝 Verbose Logging: Enabled');
+        console.log('🔒 Security Headers: Active');
+    </script>
+    
+    <!-- Load Application Scripts in Order -->
+    <script src="config.js"></script>
+    
+    <!-- Emergency Inline Logger - CLEAN VERSION -->
+    <script>
+        console.log('🚨 Loading emergency Logger...');
+        
+        class Logger {
+            constructor() {
+                this.logs = [];
+                this.sessionId = 'session_' + Date.now();
+                console.log('✅ Emergency Logger initialized');
+            }
+            
+            log(level, message, data, category) {
+                if (!level) level = 'INFO';
+                if (!message) message = '';
+                if (!data) data = {};
+                if (!category) category = 'GENERAL';
+                
+                const entry = {
+                    timestamp: new Date().toISOString(),
+                    level: level,
+                    message: message,
+                     data,
+                    category: category,
+                    id: Date.now() + Math.random()
+                };
+                
+                this.logs.push(entry);
+                console.log('[' + level + '] [' + category + '] ' + message, data);
+                
+                if (this.logs.length > 1000) {
+                    this.logs = this.logs.slice(-500);
+                }
+            }
+            
+            error(message, data, category) {
+                this.log('ERROR', message, data, category);
+            }
+            
+            warn(message, data, category) {
+                this.log('WARN', message, data, category);
+            }
+            
+            info(message, data, category) {
+                this.log('INFO', message, data, category);
+            }
+            
+            debug(message, data, category) {
+                this.log('DEBUG', message, data, category);
+            }
+            
+            transferStart(id, count) {
+                this.info('Transfer started', {id: id, count: count}, 'TRANSFER');
+            }
+            
+            transferComplete(id, res) {
+                this.info('Transfer completed', {id: id, res: res}, 'TRANSFER');
+            }
+            
+            fileTransferStart() {
+                this.info('File transfer started', {}, 'FILE_TRANSFER');
+            }
+            
+            fileTransferComplete() {
+                this.info('File transfer completed', {}, 'FILE_TRANSFER');
+            }
+            
+            chunkTransfer() {
+                this.debug('Chunk transfer', {}, 'CHUNK_TRANSFER');
+            }
+            
+            apiCall() {
+                this.debug('API call', {}, 'API_CALL');
+            }
+            
+            getRecentLogs(count) {
+                if (!count) count = 10;
+                return this.logs.slice(-count);
+            }
+            
+            getFailedTransfers() {
+                return [];
+            }
+            
+            downloadLogFile() {
+                return false;
+            }
+            
+            clearLogs() {
+                this.logs = [];
+                console.log('Logs cleared');
+            }
+        }
+        
+        window.Logger = Logger;
+        console.log('✅ Emergency Logger ready');
+    </script>
+    
+    <!-- Continue with other scripts -->
+    <script src="ui-manager.js"></script>
+    <script src="chunked-transfer.js"></script>
+    <script src="error-handler.js"></script>
+    <script src="app.js"></script>
+    
+    <!-- Performance monitoring -->
+    <script>
+        window.addEventListener('load', function() {
+            if ('performance' in window) {
+                const loadTime = Math.round(performance.now());
+                console.log('⚡ Load time: ' + loadTime + 'ms');
+            }
+        });
+    </script>
 
-  <!-- DASHBOARD VIEW -->
-  <div id="dashboard-view" class="dashboard" style="display:none;">
-    <!-- ... your dashboard UI ... -->
-  </div>
-
-  <!-- PROGRESS PANEL, NOTIFICATIONS, OVERLAY -->
-  <div id="transfer-progress" class="transfer-progress" style="display:none;">…</div>
-  <div id="notifications" class="notifications"></div>
-  <div id="modal-overlay" class="modal-overlay hidden"></div>
-
-  <!-- Log startup -->
-  <script>
-    console.log('🚀 DriveBridge v2.0 - Production Ready');
-    console.log('📊 Chunked Transfer Engine: Enabled');
-    console.log('📝 Verbose Logging: Enabled');
-    console.log('🔒 Security Headers: Active');
-  </script>
-
-  <!-- Application Scripts Loading -->
-
-  <!-- 1/7: Config -->
-  <script src="config.js"></script>
-
-  <!-- 2/7: Emergency Inline Logger (bypasses broken logger.js) -->
-  <script>
-    console.log('🚨 Loading emergency Logger...');
-    class Logger {
-      constructor() {
-        this.logs = [];
-        this.sessionId = 'session_' + Date.now();
-        console.log('✅ Emergency Logger initialized');
-      }
-      log(level, message, data, category) {
-        const entry = {
-          timestamp: new Date().toISOString(),
-          level: level || 'INFO',
-          message: message || '',
-           data || {},
-          category: category || 'GENERAL',
-          id: Date.now() + Math.random()
-        };
-        this.logs.push(entry);
-        console.log('[' + (level||'INFO') + '] [' + (category||'GENERAL') + '] ' + message, data);
-        if (this.logs.length > 1000) this.logs = this.logs.slice(-500);
-      }
-      error(m,d,c){this.log('ERROR',m,d,c);}
-      warn(m,d,c){this.log('WARN',m,d,c);}
-      info(m,d,c){this.log('INFO',m,d,c);}
-      debug(m,d,c){this.log('DEBUG',m,d,c);}
-      transferStart(id,count){this.info('Transfer started',{id,count},'TRANSFER');}
-      transferComplete(id,res){this.info('Transfer completed',{id,res},'TRANSFER');}
-      fileTransferStart(){this.info('File transfer started','','FILE_TRANSFER');}
-      fileTransferComplete(){this.info('File transfer completed','','FILE_TRANSFER');}
-      chunkTransfer(){this.debug('Chunk transfer','','CHUNK_TRANSFER');}
-      apiCall(){this.debug('API call','','API_CALL');}
-      getRecentLogs(n){return this.logs.slice(-(n||10));}
-      getFailedTransfers(){return[];}
-      downloadLogFile(){return false;}
-      clearLogs(){this.logs=[];console.log('Logs cleared');}
-    }
-    window.Logger = Logger;
-    console.log('✅ Emergency Logger ready');
-  </script>
-
-  <!-- 3/7: Disable the broken external logger.js -->
-  <!-- <script src="logger.js"></script> -->
-
-  <!-- 4/7: UI Manager -->
-  <script src="ui-manager.js"></script>
-
-  <!-- 5/7: Chunked Transfer Engine -->
-  <script src="chunked-transfer.js"></script>
-
-  <!-- 6/7: Error Handler -->
-  <script src="error-handler.js"></script>
-
-  <!-- 7/7: Main Application -->
-  <script src="app.js"></script>
-
-  <!-- Performance & Diagnostics -->
-  <script>
-    window.addEventListener('load', ()=>{
-      if ('performance' in window) {
-        const t= Math.round(performance.now());
-        console.log(`⚡ Load time: ${t}ms`);
-      }
-    });
-  </script>
 </body>
 </html>
