@@ -30,7 +30,15 @@ class Logger {
 
   log(level, message, data = {}, category = 'GENERAL') {
     const timestamp = new Date().toISOString();
-    const logEntry = { timestamp, level: level.toUpperCase(), category, message, data: JSON.parse(JSON.stringify(data)), sessionId: this.sessionId, id: Date.now() + Math.random() };
+    const logEntry = {
+      timestamp,
+      level: level.toUpperCase(),
+      category,
+      message,
+       JSON.parse(JSON.stringify(data)),
+      sessionId: this.sessionId,
+      id: Date.now() + Math.random()
+    };
     this.logs.push(logEntry);
     if (this.config.enableConsoleLog) {
       const method = this.getConsoleMethod(level);
@@ -66,13 +74,11 @@ class Logger {
   fileTransferStart(fid, name, size, chunks) { this.info(`File transfer started: ${name}`, { fid, name, size, chunks }, 'FILE_TRANSFER'); }
   fileTransferComplete(fid, name, ok, err = null) {
     const lvl = ok ? 'INFO' : 'ERROR';
-    const msg = ok ? `Completed: ${name}` : `Failed: ${name}`;
-    this.log(lvl, msg, { fid, name, ok, error: err ? { message: err.message, stack: err.stack } : null }, 'FILE_TRANSFER');
+    this.log(lvl, ok ? `Completed: ${name}` : `Failed: ${name}`, { fid, name, ok, error: err }, 'FILE_TRANSFER');
   }
   chunkTransfer(fid, name, idx, total, ok, err = null, retry = 0) {
     const lvl = ok ? 'DEBUG' : 'WARN';
-    const msg = ok ? `Chunk ${idx+1}/${total} done` : `Chunk ${idx+1}/${total} failed`;
-    this.log(lvl, msg, { fid, name, idx, total, retry, error: err }, 'CHUNK_TRANSFER');
+    this.log(lvl, ok ? `Chunk ${idx+1}/${total} done` : `Chunk ${idx+1}/${total} failed`, { fid, name, idx, total, retry, error: err }, 'CHUNK_TRANSFER');
   }
   apiCall(method, url, ok, status, dur, err = null) {
     const lvl = ok ? 'DEBUG' : 'ERROR';
@@ -80,15 +86,31 @@ class Logger {
   }
 
   getRecentLogs(n = 50) {
-    return this.logs.slice(-n).map(l => ({ timestamp: new Date(l.timestamp).toLocaleTimeString(), level: l.level, category: l.category, message: l.message, id: l.id }));
+    return this.logs.slice(-n).map(l => ({
+      timestamp: new Date(l.timestamp).toLocaleTimeString(),
+      level: l.level,
+      category: l.category,
+      message: l.message,
+      id: l.id
+    }));
   }
 
   getFailedTransfers() {
-    return this.logs.filter(l => l.category==='FILE_TRANSFER' && l.data && l.data.ok===false).map(l => ({ fileName: l.data.name, error: l.data.error.message, timestamp: l.timestamp }));
+    return this.logs.filter(l => l.category==='FILE_TRANSFER' && l.data && l.data.ok===false).map(l => ({
+      fileName: l.data.name,
+      error: l.data.error.message,
+      timestamp: l.timestamp
+    }));
   }
 
   generateVerboseLog() {
-    const header = [`# DriveBridge Transfer Log`,`# Session: ${this.sessionId}`,`# Generated: ${new Date().toISOString()}`,`# Entries: ${this.logs.length}`,``].join('\n');
+    const header = [
+      `# DriveBridge Transfer Log`,
+      `# Session: ${this.sessionId}`,
+      `# Generated: ${new Date().toISOString()}`,
+      `# Entries: ${this.logs.length}`,
+      ``
+    ].join('\n');
     const body = this.logs.map(l => `[${l.timestamp}] [${l.level}] [${l.category}] ${l.message}`).join('\n');
     return `${header}\n${body}`;
   }
@@ -113,12 +135,12 @@ class Logger {
   }
 
   clearLogs() {
-    const count = this.logs.length;
+    const oldCount = this.logs.length;
     this.logs = [];
     this.sessionId = this.generateSessionId();
-    this.info(`Cleared ${count} logs, new session ${this.sessionId}`);
+    this.info(`Cleared ${oldCount} logs, new session ${this.sessionId}`);
   }
 }
 
-if (typeof window!=='undefined') window.Logger = Logger;
-if (typeof module!=='undefined'&&module.exports) module.exports = Logger;
+if (typeof window !== 'undefined') window.Logger = Logger;
+if (typeof module !== 'undefined' && module.exports) module.exports = Logger;
