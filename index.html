@@ -3,26 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DriveBridge - Secure Cloud File Transfer</title>
-  <meta name="description" content="Secure, chunked file transfer between Google Drive and OneDrive with verbose logging">
-  <meta name="robots" content="noindex, nofollow">
-
-  <!-- Security Headers -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com https://alcdn.msauth.net; connect-src 'self' https://www.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com; style-src 'self' 'unsafe-inline'; img-src 'self'  https:; frame-src https://accounts.google.com https://login.microsoftonline.com;">
+  <title>DriveBridge</title>
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com https://alcdn.msauth.net;
+                 connect-src 'self' https://www.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com;
+                 style-src 'self' 'unsafe-inline';
+                 img-src 'self'  https:;
+                 frame-src https://accounts.google.com https://login.microsoftonline.com;">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-
-  <!-- Favicon & Preconnect -->
   <link rel="icon" href="image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Ctext y='.9em' font-size='90'%3E🌉%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://apis.google.com">
   <link rel="preconnect" href="https://accounts.google.com">
   <link rel="preconnect" href="https://graph.microsoft.com">
   <link rel="preconnect" href="https://login.microsoftonline.com">
-
-  <!-- External Libraries -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js" crossorigin="anonymous"></script>
-
-  <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -38,16 +34,16 @@
             <div class="version-info">v2.0 • Chunked Transfer Engine</div>
           </div>
           <div class="description">
-            <p>Transfer files seamlessly between Google Drive and OneDrive with chunked transfers, verbose logging, and enterprise-grade security.</p>
+            Transfer files seamlessly between Google Drive and OneDrive.
           </div>
           <div class="security-notice">
-            <p class="security-text">🔒 Your data never touches our servers. All transfers happen directly between your browser and cloud services.</p>
+            🔒 Data never touches our servers. All transfers are browser‐to‐cloud.
           </div>
           <div class="auth-buttons">
             <div class="service-card">
               <div class="service-info">
                 <h3>📁 Google Drive</h3>
-                <div class="connection-status" id="google-status">
+                <div id="google-status" class="connection-status">
                   <span class="status status--error">Disconnected</span>
                 </div>
               </div>
@@ -56,7 +52,7 @@
             <div class="service-card">
               <div class="service-info">
                 <h3>☁️ OneDrive</h3>
-                <div class="connection-status" id="onedrive-status">
+                <div id="onedrive-status" class="connection-status">
                   <span class="status status--error">Disconnected</span>
                 </div>
               </div>
@@ -64,7 +60,7 @@
             </div>
           </div>
           <div class="proceed-section">
-            <button id="proceed-btn" class="btn btn--transfer" disabled>🚀 Launch DriveBridge Dashboard</button>
+            <button id="proceed-btn" class="btn btn--transfer" disabled>Launch Dashboard</button>
             <p>Connect both services to continue</p>
           </div>
         </div>
@@ -72,80 +68,62 @@
     </div>
 
     <!-- Dashboard View -->
-    <div id="dashboard-view" class="dashboard" style="display:none;">
+    <div id="dashboard-view" class="dashboard" style="display:none">
       <header class="header">
-        <div class="header__content">
-          <h1 class="header__title">🌉 DriveBridge</h1>
-          <div class="header__actions">
-            <button id="refresh-btn" class="btn btn--secondary" title="Refresh file lists (Ctrl+R)">🔄 Refresh</button>
-            <button id="download-logs-btn" class="btn btn--secondary" title="Download verbose logs (Ctrl+L)">📄 Export Logs</button>
-            <button id="disconnect-all-btn" class="btn btn--ghost">🔌 Disconnect All</button>
-          </div>
+        <h1>🌉 DriveBridge</h1>
+        <div class="header__actions">
+          <button id="refresh-btn" class="btn btn--secondary">Refresh</button>
+          <button id="download-logs-btn" class="btn btn--secondary">Export Logs</button>
+          <button id="disconnect-all-btn" class="btn btn--ghost">Disconnect All</button>
         </div>
       </header>
       <main class="file-browser">
+        <!-- Google Panel -->
         <section class="panel panel--google">
           <div class="panel__header">
             <h2>📁 Google Drive <span class="chunked-indicator">Chunked Download</span></h2>
             <div class="panel__actions">
-              <input type="text" id="google-search" class="search-input" placeholder="Search files..." autocomplete="off">
+              <input id="google-search" class="search-input" placeholder="Search files...">
               <button id="google-select-all" class="btn btn--ghost btn--small">Select All</button>
               <button id="google-clear-all" class="btn btn--ghost btn--small">Clear</button>
-              <button id="google-new-folder" class="btn btn--secondary btn--small" title="Create new folder">📁+</button>
+              <button id="google-new-folder" class="btn btn--secondary btn--small">New Folder</button>
             </div>
           </div>
-          <div id="google-breadcrumb" class="breadcrumb">
-            <span class="breadcrumb__item breadcrumb__item--active">Root</span>
-          </div>
-          <div id="google-file-list" class="file-list"><div class="loading">Loading Google Drive files...</div></div>
+          <nav id="google-breadcrumb" class="breadcrumb"><span>Root</span></nav>
+          <div id="google-file-list" class="file-list"><div>Loading...</div></div>
           <div class="transfer-actions">
-            <button id="transfer-to-onedrive" class="btn btn--transfer" disabled>Transfer Selected to OneDrive → <span class="chunked-badge">CHUNKED</span></button>
+            <button id="transfer-to-onedrive" class="btn btn--transfer" disabled>Transfer to OneDrive →</button>
           </div>
         </section>
+
+        <!-- OneDrive Panel -->
         <section class="panel panel--onedrive">
           <div class="panel__header">
             <h2>☁️ OneDrive <span class="chunked-indicator">Chunked Upload</span></h2>
             <div class="panel__actions">
-              <input type="text" id="onedrive-search" class="search-input" placeholder="Search files..." autocomplete="off">
+              <input id="onedrive-search" class="search-input" placeholder="Search files...">
               <button id="onedrive-select-all" class="btn btn--ghost btn--small">Select All</button>
               <button id="onedrive-clear-all" class="btn btn--ghost btn--small">Clear</button>
-              <button id="onedrive-new-folder" class="btn btn--secondary btn--small" title="Create new folder">📁+</button>
+              <button id="onedrive-new-folder" class="btn btn--secondary btn--small">New Folder</button>
             </div>
           </div>
-          <div id="onedrive-breadcrumb" class="breadcrumb">
-            <span class="breadcrumb__item breadcrumb__item--active">Root</span>
-          </div>
-          <div id="onedrive-file-list" class="file-list"><div class="loading">Loading OneDrive files...</div></div>
+          <nav id="onedrive-breadcrumb" class="breadcrumb"><span>Root</span></nav>
+          <div id="onedrive-file-list" class="file-list"><div>Loading...</div></div>
           <div class="transfer-actions">
-            <button id="transfer-to-google" class="btn btn--transfer" disabled>← Transfer Selected to Google Drive</button>
+            <button id="transfer-to-google" class="btn btn--transfer" disabled>← Transfer to Google</button>
           </div>
         </section>
       </main>
     </div>
   </div>
 
-  <!-- Transfer Progress & Notifications & Modals -->
-  <div id="transfer-progress" class="transfer-progress" style="display:none;">
-    <div class="transfer-header">
-      <h3>📊 Transfer Progress</h3>
-      <div class="transfer-controls">
-        <button id="toggle-logs-btn" class="btn btn--ghost btn--small" title="Toggle logs visibility">👁️ Hide</button>
-        <button id="clear-logs-btn" class="btn btn--ghost btn--small" title="Clear transfer logs">🗑️ Clear</button>
-        <button id="download-logs-btn" class="btn btn--ghost btn--small" title="Download detailed logs">📄 Export</button>
-      </div>
-    </div>
-    <div id="transfer-list" class="transfer-logs"></div>
-  </div>
+  <!-- Progress, Notifications, Overlay -->
+  <div id="transfer-progress" class="transfer-progress" style="display:none">…</div>
   <div id="notifications" class="notifications"></div>
   <div id="modal-overlay" class="modal-overlay hidden"></div>
 
   <!-- Startup Logs -->
-  <script>
-    console.log('🚀 DriveBridge v2.0 - Production Ready');
-    console.log('📊 Chunked Transfer Engine: Enabled');
-    console.log('📝 Verbose Logging: Enabled');
-    console.log('🔒 Security Headers: Active');
-  </script>
+  <script>console.log('🚀 DriveBridge v2.0 ready')</script>
 
   <!-- Application Scripts -->
   <script src="config.js"></script>
@@ -155,11 +133,7 @@
   <script src="error-handler.js"></script>
   <script src="app.js"></script>
 
-  <!-- Performance Monitoring -->
-  <script>
-    window.addEventListener('load', ()=> {
-      if (performance) console.log(`⚡ Load time: ${Math.round(performance.now())}ms`);
-    });
-  </script>
+  <!-- Performance -->
+  <script>window.addEventListener('load', ()=>console.log(`⚡${Math.round(performance.now())}ms`));</script>
 </body>
 </html>
