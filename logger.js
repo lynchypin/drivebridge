@@ -1,3 +1,6 @@
+// DriveBridge Logger - ES5 Compatible Production Version
+// Fixed syntax error and made fully ES5 compatible
+
 function Logger() {
     this.logs = [];
     this.sessionId = this.generateSessionId();
@@ -29,7 +32,7 @@ Logger.prototype.log = function(level, message, data, category) {
         level: level.toUpperCase(),
         category: category.toUpperCase(),
         message: String(message || ''),
-         JSON.parse(JSON.stringify(data || {})),
+        data: JSON.parse(JSON.stringify(data || {})), // FIXED: Added 'data:' property name
         sessionId: this.sessionId,
         id: Date.now() + Math.random()
     };
@@ -188,9 +191,9 @@ Logger.prototype.getFailedTransfers = function() {
 
 Logger.prototype.generateVerboseLog = function() {
     var header = '# DriveBridge Transfer Log\n' +
-                '# Session ID: ' + this.sessionId + '\n' +
-                '# Generated: ' + new Date().toISOString() + '\n' +
-                '# Total Entries: ' + this.logs.length + '\n\n';
+        '# Session ID: ' + this.sessionId + '\n' +
+        '# Generated: ' + new Date().toISOString() + '\n' +
+        '# Total Entries: ' + this.logs.length + '\n\n';
 
     var logEntries = [];
     for (var i = 0; i < this.logs.length; i++) {
@@ -240,6 +243,7 @@ Logger.prototype.clearLogs = function() {
     this.info('Logs cleared, new session started', { previousEntries: oldCount });
 };
 
+// Global assignment - CRITICAL for app initialization
 if (typeof window !== 'undefined') {
     window.Logger = Logger;
 }
