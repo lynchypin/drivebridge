@@ -4,8 +4,8 @@ function ChunkedTransferEngine(downloadChunkSize, uploadChunkSize, maxConcurrent
     this.uploadChunkSize = uploadChunkSize || 8 * 1024 * 1024;
     this.maxConcurrentChunks = maxConcurrentChunks || 3;
     
-    if (window.Logger) {
-        window.Logger.prototype.info('ENGINE', 'Chunked Transfer Engine initialized', {
+    if (window.Logger && window.logger) {
+        window.logger.info('ENGINE', 'Chunked Transfer Engine initialized', {
             downloadChunkSize: this.downloadChunkSize,
             uploadChunkSize: this.uploadChunkSize,
             maxConcurrentChunks: this.maxConcurrentChunks
@@ -93,8 +93,8 @@ ChunkedTransferEngine.prototype.downloadChunk = function(fileId, start, end, fil
     }).then(function(response) {
         var duration = Date.now() - startTime;
         
-        if (window.Logger) {
-            window.Logger.prototype.debug('API_CALL', 'API GET ' + (response.ok ? 'success' : 'failed') + ': drive/v3/files/' + fileId, {
+        if (window.logger) {
+            window.logger.debug('API_CALL', 'API GET ' + (response.ok ? 'success' : 'failed') + ': drive/v3/files/' + fileId, {
                 method: 'GET',
                 url: 'drive/v3/files/' + fileId,
                 responseStatus: response.status,
@@ -117,8 +117,8 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
     var chunks = Math.ceil(fileSize / this.downloadChunkSize);
     var downloadedChunks = [];
     
-    if (window.Logger) {
-        window.Logger.prototype.debug('DOWNLOAD', 'Planning chunked download', {
+    if (window.logger) {
+        window.logger.debug('DOWNLOAD', 'Planning chunked download', {
             fileId: fileId,
             totalSize: fileSize,
             chunkSize: this.downloadChunkSize,
@@ -145,8 +145,8 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
                 downloadedChunks[currentIndex] = arrayBuffer;
                 activeDownloads--;
                 
-                if (window.Logger) {
-                    window.Logger.prototype.chunkTransfer(fileId, fileName, currentIndex, chunks, true, 0, null);
+                if (window.logger) {
+                    window.logger.chunkTransfer(fileId, fileName, currentIndex, chunks, true, 0, null);
                 }
                 
                 return processNextChunk();
@@ -154,8 +154,8 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
             .catch(function(error) {
                 activeDownloads--;
                 
-                if (window.Logger) {
-                    window.Logger.prototype.chunkTransfer(fileId, fileName, currentIndex, chunks, false, 0, error);
+                if (window.logger) {
+                    window.logger.chunkTransfer(fileId, fileName, currentIndex, chunks, false, 0, error);
                 }
                 
                 throw error;
@@ -184,8 +184,8 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
             }
         });
         
-        if (window.Logger) {
-            window.Logger.prototype.info('DOWNLOAD', 'Chunked download completed', {
+        if (window.logger) {
+            window.logger.info('DOWNLOAD', 'Chunked download completed', {
                 fileId: fileId,
                 expectedSize: fileSize,
                 actualSize: totalSize,
@@ -226,8 +226,8 @@ ChunkedTransferEngine.prototype.createUploadSession = function(fileName, fileSiz
         }).then(function(response) {
             var duration = Date.now() - startTime;
             
-            if (window.Logger) {
-                window.Logger.prototype.debug('API_CALL', 'API POST ' + (response.ok ? 'success' : 'failed') + ': graph/createUploadSession', {
+            if (window.logger) {
+                window.logger.debug('API_CALL', 'API POST ' + (response.ok ? 'success' : 'failed') + ': graph/createUploadSession', {
                     method: 'POST',
                     url: 'graph/createUploadSession',
                     responseStatus: response.status,
@@ -246,8 +246,8 @@ ChunkedTransferEngine.prototype.createUploadSession = function(fileName, fileSiz
             return response.json();
         });
     }).then(function(data) {
-        if (window.Logger) {
-            window.Logger.prototype.info('UPLOAD', 'Upload session created for ' + fileName, {
+        if (window.logger) {
+            window.logger.info('UPLOAD', 'Upload session created for ' + fileName, {
                 uploadUrl: 'received',
                 fileSize: fileSize
             });
@@ -273,8 +273,8 @@ ChunkedTransferEngine.prototype.uploadChunkWithRetry = function(uploadUrl, chunk
     })
     .then(function(response) {
         if (response.ok || response.status === 202) {
-            if (window.Logger) {
-                window.Logger.prototype.chunkTransfer(fileName, fileName, chunkIndex, totalChunks, true, attempt - 1, null);
+            if (window.logger) {
+                window.logger.chunkTransfer(fileName, fileName, chunkIndex, totalChunks, true, attempt - 1, null);
             }
             return response.status === 202 ? null : response.json();
         } else {
@@ -284,15 +284,15 @@ ChunkedTransferEngine.prototype.uploadChunkWithRetry = function(uploadUrl, chunk
         }
     })
     .catch(function(error) {
-        if (window.Logger) {
-            window.Logger.prototype.chunkTransfer(fileName, fileName, chunkIndex, totalChunks, false, attempt - 1, { message: error.message });
+        if (window.logger) {
+            window.logger.chunkTransfer(fileName, fileName, chunkIndex, totalChunks, false, attempt - 1, { message: error.message });
         }
         
         if (attempt < maxAttempts) {
             var delay = Math.pow(2, attempt - 1) * 1000;
             
-            if (window.Logger) {
-                window.Logger.prototype.debug('RETRY', 'Retrying upload chunk ' + (chunkIndex + 1) + ' in ' + delay + 'ms', {
+            if (window.logger) {
+                window.logger.debug('RETRY', 'Retrying upload chunk ' + (chunkIndex + 1) + ' in ' + delay + 'ms', {
                     attempt: attempt,
                     maxAttempts: maxAttempts
                 });
@@ -314,8 +314,8 @@ ChunkedTransferEngine.prototype.uploadFileInChunks = function(fileBuffer, fileNa
     var fileSize = fileBuffer.byteLength;
     var totalChunks = Math.ceil(fileSize / this.uploadChunkSize);
     
-    if (window.Logger) {
-        window.Logger.prototype.debug('UPLOAD', 'Planning chunked upload', {
+    if (window.logger) {
+        window.logger.debug('UPLOAD', 'Planning chunked upload', {
             fileName: fileName,
             totalSize: fileSize,
             chunkSize: this.uploadChunkSize,
@@ -382,8 +382,8 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
         return Promise.reject(new Error('Invalid OneDrive destination folder ID: ' + destinationFolderId));
     }
     
-    if (window.Logger) {
-        window.Logger.prototype.info('FILE_TRANSFER', 'File transfer started: ' + fileName, {
+    if (window.logger) {
+        window.logger.info('FILE_TRANSFER', 'File transfer started: ' + fileName, {
             fileId: fileId,
             fileName: fileName,
             fileSize: fileSize.toString(),
@@ -394,19 +394,19 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
     // Acquire wake lock if available
     if ('wakeLock' in navigator) {
         navigator.wakeLock.request('screen').then(function(wakeLock) {
-            if (window.Logger) {
-                window.Logger.prototype.info('WAKE_LOCK', 'Wake lock acquired - screen will stay awake during transfers');
+            if (window.logger) {
+                window.logger.info('WAKE_LOCK', 'Wake lock acquired - screen will stay awake during transfers');
             }
         }).catch(function(error) {
-            if (window.Logger) {
-                window.Logger.prototype.warn('WAKE_LOCK', 'Failed to acquire wake lock', { error: error.message });
+            if (window.logger) {
+                window.logger.warn('WAKE_LOCK', 'Failed to acquire wake lock', { error: error.message });
             }
         });
     }
     
     // Step 1: Download file in chunks
-    if (window.Logger) {
-        window.Logger.prototype.info('DOWNLOAD', 'Starting chunked download: ' + fileName, {
+    if (window.logger) {
+        window.logger.info('DOWNLOAD', 'Starting chunked download: ' + fileName, {
             fileId: fileId,
             fileSize: fileSize.toString(),
             chunkSize: this.downloadChunkSize
@@ -415,16 +415,16 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
     
     return this.downloadFileInChunks(fileId, fileSize, fileName)
         .then(function(fileBuffer) {
-            if (window.Logger) {
-                window.Logger.prototype.info('DOWNLOAD', 'Download completed: ' + fileName, {
+            if (window.logger) {
+                window.logger.info('DOWNLOAD', 'Download completed: ' + fileName, {
                     fileId: fileId,
                     downloadedSize: fileBuffer.byteLength
                 });
             }
             
             // Step 2: Create upload session
-            if (window.Logger) {
-                window.Logger.prototype.info('UPLOAD', 'Starting chunked upload: ' + fileName, {
+            if (window.logger) {
+                window.logger.info('UPLOAD', 'Starting chunked upload: ' + fileName, {
                     fileId: fileId,
                     fileSize: fileBuffer.byteLength,
                     chunkSize: self.uploadChunkSize,
@@ -439,8 +439,8 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
                 });
         })
         .then(function() {
-            if (window.Logger) {
-                window.Logger.prototype.info('FILE_TRANSFER', 'File transfer completed: ' + fileName, {
+            if (window.logger) {
+                window.logger.info('FILE_TRANSFER', 'File transfer completed: ' + fileName, {
                     fileId: fileId,
                     fileName: fileName,
                     success: true
@@ -449,16 +449,16 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
             
             // Release wake lock
             if ('wakeLock' in navigator) {
-                if (window.Logger) {
-                    window.Logger.prototype.info('WAKE_LOCK', 'Wake lock released');
+                if (window.logger) {
+                    window.logger.info('WAKE_LOCK', 'Wake lock released');
                 }
             }
             
             return { success: true, fileName: fileName };
         })
         .catch(function(error) {
-            if (window.Logger) {
-                window.Logger.prototype.error('FILE_TRANSFER', 'File transfer failed: ' + fileName, {
+            if (window.logger) {
+                window.logger.error('FILE_TRANSFER', 'File transfer failed: ' + fileName, {
                     fileId: fileId,
                     fileName: fileName,
                     success: false,
@@ -469,7 +469,7 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
                     }
                 });
                 
-                window.Logger.prototype.error('TRANSFER', 'Transfer failed: ' + fileName, {
+                window.logger.error('TRANSFER', 'Transfer failed: ' + fileName, {
                     fileId: fileId,
                     error: {
                         message: error.message,
@@ -478,15 +478,15 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
                     }
                 });
                 
-                window.Logger.prototype.error('ERROR', 'Transfer failed for ' + fileName, {
+                window.logger.error('ERROR', 'Transfer failed for ' + fileName, {
                     error: error.message
                 });
             }
             
             // Release wake lock on error
             if ('wakeLock' in navigator) {
-                if (window.Logger) {
-                    window.Logger.prototype.info('WAKE_LOCK', 'Wake lock released');
+                if (window.logger) {
+                    window.logger.info('WAKE_LOCK', 'Wake lock released');
                 }
             }
             
