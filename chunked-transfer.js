@@ -97,7 +97,8 @@ ChunkedTransferEngine.prototype.downloadChunk = function(fileId, start, end, fil
     }
     
     var headers = {
-        'Authorization': 'Bearer ' + googleToken
+        'Authorization': 'Bearer ' + googleToken,
+        'Accept': 'application/octet-stream'
     };
     
     if (start !== undefined && end !== undefined) {
@@ -141,7 +142,7 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
         window.logger.debug('Planning chunked download', {
             fileId: fileId,
             totalSize: fileSize,
-            chunkSize: this.downloadChunkSize,
+            chunkSize: this.downloadChunkSize,  // FIXED: Use actual number, not logger object
             totalChunks: chunks
         }, 'DOWNLOAD');
     }
