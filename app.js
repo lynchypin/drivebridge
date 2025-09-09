@@ -310,42 +310,42 @@ class DriveBridge {
         });
     }
 
-    waitForMSAL() {
-        return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 100;
-            
-            const checkMSAL = () => {
-                attempts++;
-                if (typeof msal !== 'undefined' && msal.PublicClientApplication) {
-                    try {
-                        this.state.msalInstance = new msal.PublicClientApplication({
-                            auth: {
-                                clientId: this.config.microsoft.clientId,
-                                authority: this.config.microsoft.authority,
-                                redirectUri: this.config.microsoft.redirectUri
-                            },
-                            cache: {
-                                cacheLocation: 'sessionStorage',
-                                storeAuthStateInCookie: false
-                            }
-                        });
-                        this.logger.info('Microsoft MSAL initialized');
-                        resolve();
-                    } catch (error) {
-                        this.logger.error('MSAL initialization error', { error: error.message });
-                        reject(error);
-                    }
-                } else if (attempts >= maxAttempts) {
-                    reject(new Error('MSAL failed to load'));
-                } else {
-                    setTimeout(checkMSAL, 100);
-                }
-            };
-            
-            checkMSAL();
-        });
-    }
+waitForMSAL() {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    const checkMSAL = () => {
+      attempts++;
+      if (typeof msal !== 'undefined' && msal.PublicClientApplication) {
+        try {
+          this.state.msalInstance = new msal.PublicClientApplication({
+            auth: {
+              clientId: this.config.microsoft.clientId,
+              authority: this.config.microsoft.authority,
+              redirectUri: this.config.microsoft.redirectUri
+            },
+            cache: {
+              cacheLocation: 'sessionStorage',
+              storeAuthStateInCookie: false
+            }
+          });
+          this.logger.info('Microsoft MSAL initialized');
+          resolve();
+        } catch (error) {
+          this.logger.error('MSAL initialization error', { error: error.message });
+          reject(error);
+        }
+      } else if (attempts >= maxAttempts) {
+        reject(new Error('MSAL failed to load'));
+      } else {
+        setTimeout(checkMSAL, 100);
+      }
+    };
+
+    checkMSAL();
+  });
+}
 
     async authenticateGoogle() {
         try {
