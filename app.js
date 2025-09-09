@@ -967,12 +967,11 @@ class DriveBridge {
                         success = await this.transferGoogleWorkspaceFile(fileInfo);
                     } else {
                         const result = await this.transferEngine.transferFileChunked(
-                            fileInfo, 
-                            this.state.googleToken, 
-                            this.state.microsoftToken,
-                            fileInfo._destinationFolder || this.state.currentOneDriveFolder,
+                            fileInfo,                                  // ✅ File info
+                            fileInfo._destinationFolder || this.state.currentOneDriveFolder,  // ✅ Destination folder ID
                             (progressData) => this.uiManager.updateProgressBar(fileInfo.id, progressData)
                         );
+
                         success = result;
                     }
                 } else {
