@@ -10,7 +10,7 @@ class DriveBridge {
         this.logger = new Logger();
         this.uiManager = new UIManager(this.logger);
         this.errorHandler = new ErrorHandler(this.logger, this.uiManager);
-        this.transferEngine = new ChunkedTransferEngine(this.logger);
+        this.transferEngine = new ChunkedTransferEngine();
         
         // Configuration
         this.config = {
