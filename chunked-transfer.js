@@ -4,12 +4,12 @@ function ChunkedTransferEngine(downloadChunkSize, uploadChunkSize, maxConcurrent
     this.uploadChunkSize = uploadChunkSize || 8 * 1024 * 1024;
     this.maxConcurrentChunks = maxConcurrentChunks || 3;
     
-    if (window.Logger && window.logger) {
-        window.logger.info('ENGINE', 'Chunked Transfer Engine initialized', {
+    if (window.logger) {
+        window.logger.info('Chunked Transfer Engine initialized', {
             downloadChunkSize: this.downloadChunkSize,
             uploadChunkSize: this.uploadChunkSize,
             maxConcurrentChunks: this.maxConcurrentChunks
-        });
+        }, 'ENGINE');
     }
 }
 
@@ -94,14 +94,14 @@ ChunkedTransferEngine.prototype.downloadChunk = function(fileId, start, end, fil
         var duration = Date.now() - startTime;
         
         if (window.logger) {
-            window.logger.debug('API_CALL', 'API GET ' + (response.ok ? 'success' : 'failed') + ': drive/v3/files/' + fileId, {
+            window.logger.debug('API GET ' + (response.ok ? 'success' : 'failed') + ': drive/v3/files/' + fileId, {
                 method: 'GET',
                 url: 'drive/v3/files/' + fileId,
                 responseStatus: response.status,
                 duration: duration,
                 success: response.ok,
                 error: response.ok ? null : response.statusText
-            });
+            }, 'API_CALL');
         }
         
         if (!response.ok) {
@@ -118,12 +118,12 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
     var downloadedChunks = [];
     
     if (window.logger) {
-        window.logger.debug('DOWNLOAD', 'Planning chunked download', {
+        window.logger.debug('Planning chunked download', {
             fileId: fileId,
             totalSize: fileSize,
             chunkSize: this.downloadChunkSize,
             totalChunks: chunks
-        });
+        }, 'DOWNLOAD');
     }
     
     var activeDownloads = 0;
@@ -185,12 +185,12 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
         });
         
         if (window.logger) {
-            window.logger.info('DOWNLOAD', 'Chunked download completed', {
+            window.logger.info('Chunked download completed', {
                 fileId: fileId,
                 expectedSize: fileSize,
                 actualSize: totalSize,
                 chunksDownloaded: downloadedChunks.length
-            });
+            }, 'DOWNLOAD');
         }
         
         return combinedBuffer;
@@ -227,14 +227,14 @@ ChunkedTransferEngine.prototype.createUploadSession = function(fileName, fileSiz
             var duration = Date.now() - startTime;
             
             if (window.logger) {
-                window.logger.debug('API_CALL', 'API POST ' + (response.ok ? 'success' : 'failed') + ': graph/createUploadSession', {
+                window.logger.debug('API POST ' + (response.ok ? 'success' : 'failed') + ': graph/createUploadSession', {
                     method: 'POST',
                     url: 'graph/createUploadSession',
                     responseStatus: response.status,
                     duration: duration,
                     success: response.ok,
                     error: response.ok ? null : response.statusText
-                });
+                }, 'API_CALL');
             }
             
             if (!response.ok) {
@@ -247,10 +247,10 @@ ChunkedTransferEngine.prototype.createUploadSession = function(fileName, fileSiz
         });
     }).then(function(data) {
         if (window.logger) {
-            window.logger.info('UPLOAD', 'Upload session created for ' + fileName, {
+            window.logger.info('Upload session created for ' + fileName, {
                 uploadUrl: 'received',
                 fileSize: fileSize
-            });
+            }, 'UPLOAD');
         }
         
         return data.uploadUrl;
@@ -292,10 +292,10 @@ ChunkedTransferEngine.prototype.uploadChunkWithRetry = function(uploadUrl, chunk
             var delay = Math.pow(2, attempt - 1) * 1000;
             
             if (window.logger) {
-                window.logger.debug('RETRY', 'Retrying upload chunk ' + (chunkIndex + 1) + ' in ' + delay + 'ms', {
+                window.logger.debug('Retrying upload chunk ' + (chunkIndex + 1) + ' in ' + delay + 'ms', {
                     attempt: attempt,
                     maxAttempts: maxAttempts
-                });
+                }, 'RETRY');
             }
             
             return new Promise(function(resolve) {
@@ -315,13 +315,13 @@ ChunkedTransferEngine.prototype.uploadFileInChunks = function(fileBuffer, fileNa
     var totalChunks = Math.ceil(fileSize / this.uploadChunkSize);
     
     if (window.logger) {
-        window.logger.debug('UPLOAD', 'Planning chunked upload', {
+        window.logger.debug('Planning chunked upload', {
             fileName: fileName,
             totalSize: fileSize,
             chunkSize: this.uploadChunkSize,
             totalChunks: totalChunks,
             destinationFolderId: arguments[3] || 'unknown'
-        });
+        }, 'UPLOAD');
     }
     
     var activeUploads = 0;
@@ -383,53 +383,53 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
     }
     
     if (window.logger) {
-        window.logger.info('FILE_TRANSFER', 'File transfer started: ' + fileName, {
+        window.logger.info('File transfer started: ' + fileName, {
             fileId: fileId,
             fileName: fileName,
             fileSize: fileSize.toString(),
             expectedChunks: Math.ceil(fileSize / this.downloadChunkSize)
-        });
+        }, 'FILE_TRANSFER');
     }
     
     // Acquire wake lock if available
     if ('wakeLock' in navigator) {
         navigator.wakeLock.request('screen').then(function(wakeLock) {
             if (window.logger) {
-                window.logger.info('WAKE_LOCK', 'Wake lock acquired - screen will stay awake during transfers');
+                window.logger.info('Wake lock acquired - screen will stay awake during transfers', {}, 'WAKE_LOCK');
             }
         }).catch(function(error) {
             if (window.logger) {
-                window.logger.warn('WAKE_LOCK', 'Failed to acquire wake lock', { error: error.message });
+                window.logger.warn('Failed to acquire wake lock', { error: error.message }, 'WAKE_LOCK');
             }
         });
     }
     
     // Step 1: Download file in chunks
     if (window.logger) {
-        window.logger.info('DOWNLOAD', 'Starting chunked download: ' + fileName, {
+        window.logger.info('Starting chunked download: ' + fileName, {
             fileId: fileId,
             fileSize: fileSize.toString(),
             chunkSize: this.downloadChunkSize
-        });
+        }, 'DOWNLOAD');
     }
     
     return this.downloadFileInChunks(fileId, fileSize, fileName)
         .then(function(fileBuffer) {
             if (window.logger) {
-                window.logger.info('DOWNLOAD', 'Download completed: ' + fileName, {
+                window.logger.info('Download completed: ' + fileName, {
                     fileId: fileId,
                     downloadedSize: fileBuffer.byteLength
-                });
+                }, 'DOWNLOAD');
             }
             
             // Step 2: Create upload session
             if (window.logger) {
-                window.logger.info('UPLOAD', 'Starting chunked upload: ' + fileName, {
+                window.logger.info('Starting chunked upload: ' + fileName, {
                     fileId: fileId,
                     fileSize: fileBuffer.byteLength,
                     chunkSize: self.uploadChunkSize,
                     destinationFolderId: destinationFolderId
-                });
+                }, 'UPLOAD');
             }
             
             return self.createUploadSession(fileName, fileBuffer.byteLength, destinationFolderId)
@@ -440,17 +440,17 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
         })
         .then(function() {
             if (window.logger) {
-                window.logger.info('FILE_TRANSFER', 'File transfer completed: ' + fileName, {
+                window.logger.info('File transfer completed: ' + fileName, {
                     fileId: fileId,
                     fileName: fileName,
                     success: true
-                });
+                }, 'FILE_TRANSFER');
             }
             
             // Release wake lock
             if ('wakeLock' in navigator) {
                 if (window.logger) {
-                    window.logger.info('WAKE_LOCK', 'Wake lock released');
+                    window.logger.info('Wake lock released', {}, 'WAKE_LOCK');
                 }
             }
             
@@ -458,7 +458,7 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
         })
         .catch(function(error) {
             if (window.logger) {
-                window.logger.error('FILE_TRANSFER', 'File transfer failed: ' + fileName, {
+                window.logger.error('File transfer failed: ' + fileName, {
                     fileId: fileId,
                     fileName: fileName,
                     success: false,
@@ -467,26 +467,26 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
                         stack: error.stack,
                         name: error.name
                     }
-                });
+                }, 'FILE_TRANSFER');
                 
-                window.logger.error('TRANSFER', 'Transfer failed: ' + fileName, {
+                window.logger.error('Transfer failed: ' + fileName, {
                     fileId: fileId,
                     error: {
                         message: error.message,
                         stack: error.stack,
                         name: error.name
                     }
-                });
+                }, 'TRANSFER');
                 
-                window.logger.error('ERROR', 'Transfer failed for ' + fileName, {
+                window.logger.error('Transfer failed for ' + fileName, {
                     error: error.message
-                });
+                }, 'ERROR');
             }
             
             // Release wake lock on error
             if ('wakeLock' in navigator) {
                 if (window.logger) {
-                    window.logger.info('WAKE_LOCK', 'Wake lock released');
+                    window.logger.info('Wake lock released', {}, 'WAKE_LOCK');
                 }
             }
             
