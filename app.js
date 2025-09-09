@@ -10,7 +10,11 @@ class DriveBridge {
         this.logger = new Logger();
         this.uiManager = new UIManager(this.logger);
         this.errorHandler = new ErrorHandler(this.logger, this.uiManager);
-        this.transferEngine = new ChunkedTransferEngine();
+        this.transferEngine = new ChunkedTransferEngine(
+          64 * 1024 * 1024,  // downloadChunkSize (64 MB)
+          16 * 1024 * 1024,  // uploadChunkSize   (16 MB)
+          5                  // maxConcurrentChunks
+        );
         
         // Configuration
         this.config = {
