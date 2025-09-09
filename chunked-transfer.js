@@ -16,9 +16,17 @@ function ChunkedTransferEngine(downloadChunkSize, uploadChunkSize, maxConcurrent
 // Get Google Auth Token
 ChunkedTransferEngine.prototype.getGoogleToken = function() {
     try {
-        var authInstance = gapi.auth2.getAuthInstance();
-        if (authInstance && authInstance.isSignedIn.get()) {
-            return authInstance.currentUser.get().getAuthResponse().access_token;
+        // Use the main app's token directly
+        if (window.app && window.app.state && window.app.state.googleToken) {
+            return window.app.state.googleToken;
+        }
+        
+        // Fallback to gapi if available
+        if (typeof gapi !== 'undefined' && gapi.auth2) {
+            var authInstance = gapi.auth2.getAuthInstance();
+            if (authInstance && authInstance.isSignedIn.get()) {
+                return authInstance.currentUser.get().getAuthResponse().access_token;
+            }
         }
     } catch (e) {
         console.warn('Failed to get Google token:', e);
@@ -30,38 +38,50 @@ ChunkedTransferEngine.prototype.getGoogleToken = function() {
 ChunkedTransferEngine.prototype.getMicrosoftToken = function() {
     return new Promise(function(resolve, reject) {
         try {
-            if (!window.msalApp) {
-                reject(new Error('MSAL app not initialized'));
+            // Use the main app's token directly
+            if (window.app && window.app.state && window.app.state.microsoftToken) {
+                resolve(window.app.state.microsoftToken);
                 return;
             }
             
-            var accounts = window.msalApp.getAllAccounts();
-            if (accounts.length === 0) {
-                reject(new Error('No Microsoft accounts found'));
-                return;
+            // Fallback to MSAL if available
+            if (window.app && window.app.state && window.app.state.msalInstance) {
+                var msalInstance = window.app.state.msalInstance;
+                var accounts = msalInstance.getAllAccounts();
+                
+                if (accounts.length === 0) {
+                    reject(new Error('No Microsoft accounts found'));
+                    return;
+                }
+                
+                var account = accounts[0];
+                var tokenRequest = {
+                    scopes: ['Files.ReadWrite'],
+                    account: account,
+                    forceRefresh: false
+                };
+                
+                msalInstance.acquireTokenSilent(tokenRequest)
+                    .then(function(response) {
+                        resolve(response.accessToken);
+                    })
+                    .catch(function(error) {
+                        console.warn('Token refresh failed, trying interactive:', error);
+                        return msalInstance.acquireTokenPopup(tokenRequest);
+                    })
+                    .then(function(response) {
+                        if (response && response.accessToken) {
+                            resolve(response.accessToken);
+                        } else {
+                            reject(new Error('No access token received'));
+                        }
+                    })
+                    .catch(function(error) {
+                        reject(new Error('Failed to acquire Microsoft token: ' + error.message));
+                    });
+            } else {
+                reject(new Error('MSAL instance not available'));
             }
-            
-            var account = accounts[0];
-            var tokenRequest = {
-                scopes: ['Files.ReadWrite'],
-                account: account,
-                forceRefresh: false
-            };
-            
-            window.msalApp.acquireTokenSilent(tokenRequest)
-                .then(function(response) {
-                    resolve(response.accessToken);
-                })
-                .catch(function(error) {
-                    console.warn('Token refresh failed, trying interactive:', error);
-                    return window.msalApp.acquireTokenPopup(tokenRequest);
-                })
-                .then(function(response) {
-                    resolve(response.accessToken);
-                })
-                .catch(function(error) {
-                    reject(new Error('Failed to acquire Microsoft token: ' + error.message));
-                });
         } catch (e) {
             reject(new Error('Error getting Microsoft token: ' + e.message));
         }
@@ -145,7 +165,7 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
                 downloadedChunks[currentIndex] = arrayBuffer;
                 activeDownloads--;
                 
-                if (window.logger) {
+                if (window.logger && window.logger.chunkTransfer) {
                     window.logger.chunkTransfer(fileId, fileName, currentIndex, chunks, true, 0, null);
                 }
                 
@@ -154,7 +174,7 @@ ChunkedTransferEngine.prototype.downloadFileInChunks = function(fileId, fileSize
             .catch(function(error) {
                 activeDownloads--;
                 
-                if (window.logger) {
+                if (window.logger && window.logger.chunkTransfer) {
                     window.logger.chunkTransfer(fileId, fileName, currentIndex, chunks, false, 0, error);
                 }
                 
@@ -206,7 +226,9 @@ ChunkedTransferEngine.prototype.createUploadSession = function(fileName, fileSiz
     }
     
     return this.getMicrosoftToken().then(function(msToken) {
-        var url = 'https://graph.microsoft.com/v1.0/me/drive/items/' + destinationFolderId + ':/' + encodeURIComponent(fileName) + ':/createUploadSession';
+        var url = destinationFolderId === 'root' 
+            ? 'https://graph.microsoft.com/v1.0/me/drive/root:/' + encodeURIComponent(fileName) + ':/createUploadSession'
+            : 'https://graph.microsoft.com/v1.0/me/drive/items/' + destinationFolderId + ':/' + encodeURIComponent(fileName) + ':/createUploadSession';
         
         var startTime = Date.now();
         
@@ -273,7 +295,7 @@ ChunkedTransferEngine.prototype.uploadChunkWithRetry = function(uploadUrl, chunk
     })
     .then(function(response) {
         if (response.ok || response.status === 202) {
-            if (window.logger) {
+            if (window.logger && window.logger.chunkTransfer) {
                 window.logger.chunkTransfer(fileName, fileName, chunkIndex, totalChunks, true, attempt - 1, null);
             }
             return response.status === 202 ? null : response.json();
@@ -284,7 +306,7 @@ ChunkedTransferEngine.prototype.uploadChunkWithRetry = function(uploadUrl, chunk
         }
     })
     .catch(function(error) {
-        if (window.logger) {
+        if (window.logger && window.logger.chunkTransfer) {
             window.logger.chunkTransfer(fileName, fileName, chunkIndex, totalChunks, false, attempt - 1, { message: error.message });
         }
         
@@ -319,8 +341,7 @@ ChunkedTransferEngine.prototype.uploadFileInChunks = function(fileBuffer, fileNa
             fileName: fileName,
             totalSize: fileSize,
             chunkSize: this.uploadChunkSize,
-            totalChunks: totalChunks,
-            destinationFolderId: arguments[3] || 'unknown'
+            totalChunks: totalChunks
         }, 'UPLOAD');
     }
     
@@ -378,8 +399,8 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
     if (!fileName) {
         return Promise.reject(new Error('File name is required'));
     }
-    if (!destinationFolderId || destinationFolderId.startsWith('ya29.')) {
-        return Promise.reject(new Error('Invalid OneDrive destination folder ID: ' + destinationFolderId));
+    if (!destinationFolderId) {
+        return Promise.reject(new Error('Destination folder ID is required'));
     }
     
     if (window.logger) {
@@ -435,7 +456,7 @@ ChunkedTransferEngine.prototype.transferFileChunked = function(fileMeta, destina
             return self.createUploadSession(fileName, fileBuffer.byteLength, destinationFolderId)
                 .then(function(uploadUrl) {
                     // Step 3: Upload file in chunks
-                    return self.uploadFileInChunks(fileBuffer, fileName, uploadUrl, destinationFolderId);
+                    return self.uploadFileInChunks(fileBuffer, fileName, uploadUrl);
                 });
         })
         .then(function() {
