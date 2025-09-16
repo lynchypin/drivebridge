@@ -46,4 +46,5 @@ const Config = {
   }
 };
 
-export default Config;
+window.Config = Config;
+
